@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BusinessSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Models\ActivityLog;
 
 class SettingController extends Controller
 {
@@ -76,6 +77,8 @@ class SettingController extends Controller
             'payment_info' => $data['payment_info'] ?? '',
 
             'promo_stacking_enabled' => $request->boolean('promo_stacking_enabled') ? '1' : '0',
+            'cashier_can_cancel' => $request->boolean('cashier_can_cancel') ? '1' : '0',
+
 
             'member_min_transactions' => $data['member_min_transactions'],
             'member_min_spent' => $data['member_min_spent'],
@@ -95,8 +98,38 @@ class SettingController extends Controller
             $values['business_logo'] = '';
         }
 
+                // Catat apa saja yang berubah (nama pengaturannya saja, bukan isinya)
+        $before = BusinessSetting::pluck('value', 'key');
+
         foreach ($values as $key => $value) {
             BusinessSetting::updateOrCreate(['key' => $key], ['value' => (string) $value]);
+        }
+
+        $names = [
+            'business_name' => 'nama laundry', 'business_address' => 'alamat', 'business_whatsapp' => 'nomor WhatsApp',
+            'business_logo' => 'logo', 'operating_open' => 'jam buka', 'operating_close' => 'jam tutup',
+            'operating_days' => 'hari buka', 'pickup_enabled' => 'layanan jemput', 'delivery_enabled' => 'layanan antar',
+            'pickup_fee' => 'biaya jemput', 'delivery_fee' => 'biaya antar', 'free_ongkir_enabled' => 'gratis ongkir otomatis',
+            'free_ongkir_min_weight' => 'minimal berat gratis ongkir', 'work_duration_days' => 'estimasi pengerjaan umum',
+            'invoice_prefix' => 'awalan nomor transaksi', 'invoice_date_format' => 'format tanggal nomor transaksi',
+            'invoice_digits' => 'jumlah angka nomor transaksi', 'payment_methods' => 'metode pembayaran',
+            'payment_info' => 'info pembayaran', 'promo_stacking_enabled' => 'penggabungan promo',
+            'member_min_transactions' => 'syarat transaksi member', 'member_min_spent' => 'syarat belanja member',
+            'member_discount_percent' => 'diskon member', 'cashier_can_cancel' => 'izin kasir membatalkan transaksi',
+        ];
+
+        $changed = collect($values)
+            ->filter(function ($new, $key) use ($before) {
+                $old = (string) ($before[$key] ?? '');
+                $new = (string) $new;
+
+                return is_numeric($old) && is_numeric($new) ? (float) $old !== (float) $new : $old !== $new;
+            })
+            ->keys()
+            ->map(fn ($key) => $names[$key] ?? $key);
+
+        if ($changed->isNotEmpty()) {
+            ActivityLog::record('settings_changed', 'mengubah pengaturan: ' . $changed->join(', '));
         }
 
         return back()->with('success', 'Pengaturan berhasil disimpan.');

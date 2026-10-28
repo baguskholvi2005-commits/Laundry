@@ -13,7 +13,7 @@ class PickupRequestController extends Controller
     {
         $tab = in_array($request->get('tab'), ['dikonfirmasi', 'riwayat'], true) ? $request->get('tab') : 'menunggu';
 
-        $query = PickupRequest::with(['customer', 'handler', 'transaction']);
+        $query = PickupRequest::with(['customer', 'handler', 'transaction', 'items']);
 
         if ($tab === 'riwayat') {
             $query->whereIn('status', ['dijemput', 'ditolak', 'dibatalkan'])->latest('updated_at');

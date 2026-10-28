@@ -1,14 +1,22 @@
-<div class="p-5">
-    @if($logoUrl = business_logo_url())
-        <img src="{{ $logoUrl }}" alt="Logo {{ setting('business_name', 'Laundry Desa') }}" class="h-10 w-auto max-w-[8rem] object-contain mb-2">
+@php $logo = business_logo_url(); @endphp
+
+<div class="px-5 pt-5 pb-4 flex items-center gap-3">
+    @if($logo)
+        <img src="{{ $logo }}" alt="Logo" class="w-10 h-10 rounded-xl bg-white/10 object-contain p-1">
+    @else
+        <span class="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center text-white">
+            <x-lucide-shirt class="w-5 h-5" />
+        </span>
     @endif
-    <h1 class="text-xl font-bold text-brand-600">{{ setting('business_name', 'Laundry Desa') }}</h1>
-    <p class="text-xs text-gray-400">Sistem Manajemen Laundry</p>
+    <div class="min-w-0">
+        <p class="font-bold text-white leading-tight truncate">{{ setting('business_name', 'Laundry Desa') }}</p>
+        <p class="text-[11px] text-white/60">Sistem kasir dan manajemen</p>
+    </div>
 </div>
 
 @hasanyrole('pemilik|kasir')
     <a href="{{ route('transactions.create') }}"
-       class="mx-4 mb-4 bg-brand-600 text-white text-sm font-medium py-2.5 rounded-xl text-center hover:bg-brand-700 transition">
+       class="mx-4 mb-4 bg-gold-400 text-gray-900 text-sm font-semibold py-3 rounded-xl text-center hover:bg-gold-300 transition">
         + Transaksi Baru
     </a>
 @endhasanyrole
@@ -37,6 +45,10 @@
         @include('layouts.partials.nav-item', ['route' => 'inventory.index', 'icon' => 'box', 'label' => 'Inventori', 'active' => 'inventory.*'])
         @include('layouts.partials.nav-item', ['route' => 'reports.index', 'icon' => 'bar-chart-3', 'label' => 'Laporan', 'active' => 'reports.*'])
         @include('layouts.partials.nav-item', ['route' => 'users.index', 'icon' => 'user', 'label' => 'Pengguna', 'active' => 'users.*'])
+        @include('layouts.partials.nav-item', ['route' => 'activity-logs.index', 'icon' => 'history', 'label' => 'Log Aktivitas', 'active' => 'activity-logs.*'])
+        @include('layouts.partials.nav-item', ['route' => 'backups.index', 'icon' => 'database', 'label' => 'Cadangan', 'active' => 'backups.*'])
         @include('layouts.partials.nav-item', ['route' => 'settings.index', 'icon' => 'settings', 'label' => 'Pengaturan', 'active' => 'settings.*'])
     @endrole
 </nav>
+
+<p class="px-5 py-4 text-[11px] text-white/40 border-t border-white/10">{{ setting('business_name', 'Laundry Desa') }}</p>

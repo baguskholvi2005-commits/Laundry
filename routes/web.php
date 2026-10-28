@@ -22,6 +22,8 @@ use App\Http\Controllers\Portal\AuthController as PortalAuthController;
 use App\Http\Controllers\Portal\PortalController;
 use App\Http\Controllers\PickupRequestController;
 use App\Http\Controllers\Portal\PickupRequestController as PortalPickupController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\BackupController;
 
 /*
 |--------------------------------------------------------------------------
@@ -90,6 +92,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/transactions-status/ready', [TransactionController::class, 'ready'])->name('transactions.ready');
         Route::get('/transactions-status/history', [TransactionController::class, 'history'])->name('transactions.history');
 
+        // Pembatalan transaksi (hanya kalau diizinkan pemilik)
+        Route::patch('/transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');
+
         // Pembayaran
         Route::post('/transactions/{transaction}/payments', [PaymentController::class, 'store'])->name('payments.store');
 
@@ -127,7 +132,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:pemilik')->group(function () {
 
         // Pembatalan transaksi
-        // Route::patch('/transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');
+       
 
         // Pelanggan
         Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
@@ -187,6 +192,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/receivables', [ReportController::class, 'receivables'])->name('reports.receivables');
+
+        // Log aktivitas dan cadangan
+        Route::get('/log-aktivitas', [ActivityLogController::class, 'index'])->name('activity-logs.index');
+        Route::get('/cadangan', [BackupController::class, 'index'])->name('backups.index');
+        Route::post('/cadangan', [BackupController::class, 'run'])->name('backups.run');
+        Route::get('/cadangan/{file}', [BackupController::class, 'download'])
+            ->where('file', 'backup-[0-9]{8}-[0-9]{6}\.sql')
+            ->name('backups.download');
+
 
         // Pengguna
         Route::resource('users', UserController::class)->except(['show']);

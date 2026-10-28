@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
+use App\Models\ActivityLog;
 
 class UserController extends Controller
 {
@@ -101,7 +102,16 @@ class UserController extends Controller
             'avatar' => $avatarPath,
         ]);
 
+                $oldRole = $user->roles->pluck('name')->first();
         $user->syncRoles([$data['role']]);
+
+        if ($oldRole !== $data['role']) {
+            ActivityLog::record('user_changed', 'mengubah role ' . $user->name . ' dari ' . ($oldRole ?? '-') . ' menjadi ' . $data['role']);
+        }
+
+        if (! empty($data['password'])) {
+            ActivityLog::record('user_changed', 'mengganti kata sandi ' . $user->name);
+        }
 
         return redirect()->route('users.index')->with('success', 'Data pengguna diperbarui.');
     }

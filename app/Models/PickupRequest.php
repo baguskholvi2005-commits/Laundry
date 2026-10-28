@@ -14,8 +14,14 @@ class PickupRequest extends Model
         'sore' => 'Sore',
     ];
 
+    // [judul, keterangan untuk pelanggan]
+    public const MODES = [
+        'jemput' => ['Jemput saja', 'Cucianmu dijemput. Setelah selesai, kamu ambil sendiri di toko.'],
+        'jemput_antar' => ['Jemput + antar', 'Cucianmu dijemput, lalu diantar kembali ke alamatmu setelah selesai.'],
+    ];
+
     // Kolom status dan penanganan sengaja tidak masuk $fillable, hanya diubah lewat forceFill di kode yang berwenang
-    protected $fillable = ['customer_id', 'address', 'preferred_date', 'time_slot', 'notes'];
+    protected $fillable = ['customer_id', 'service_mode', 'address', 'preferred_date', 'time_slot', 'notes'];
 
     protected $casts = [
         'preferred_date' => 'date',
@@ -37,6 +43,11 @@ class PickupRequest extends Model
         return $this->belongsTo(Transaction::class);
     }
 
+    public function items()
+    {
+        return $this->hasMany(PickupRequestItem::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->whereIn('status', ['menunggu', 'dikonfirmasi']);
@@ -45,6 +56,16 @@ class PickupRequest extends Model
     public function getSlotLabelAttribute(): string
     {
         return self::TIME_SLOTS[$this->time_slot] ?? $this->time_slot;
+    }
+
+    public function getModeLabelAttribute(): string
+    {
+        return self::MODES[$this->service_mode][0] ?? (string) $this->service_mode;
+    }
+
+    public function getWantsDeliveryAttribute(): bool
+    {
+        return $this->service_mode === 'jemput_antar';
     }
 
     // Toko buka pada hari ini? Kalau hari buka belum diatur, dianggap buka setiap hari

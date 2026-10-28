@@ -46,11 +46,11 @@
                 $overdue = $active && $r->preferred_date->lt(today());
                 $wa = $r->customer->phone_normalized
                     ? 'https://wa.me/' . $r->customer->phone_normalized . '?text=' . urlencode(
-                        'Halo ' . $r->customer->name . ', terkait permintaan jemput laundry Anda pada '
+                        'Halo ' . $r->customer->name . ', terkait permintaan ' . strtolower($r->mode_label) . ' laundry Anda pada '
                         . $r->preferred_date->translatedFormat('d M Y') . ' (' . $r->slot_label . ') di ' . $biz . '.')
                     : null;
             @endphp
-            <div class="bg-white rounded-2xl border border-gray-100 p-5" x-data="{ mode: null }">
+            <div class="bg-white rounded-2xl border border-gray-100 p-5" x-data="{ panel: null }">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -64,11 +64,35 @@
                     <x-badge :status="$r->status" />
                 </div>
 
-                <div class="mt-3 text-sm space-y-1.5">
+                <div class="mt-3 text-sm space-y-2">
                     <p class="font-medium text-gray-800">
                         {{ $r->preferred_date->translatedFormat('l, d M Y') }} · {{ $r->slot_label }}
                         @if($overdue)<span class="text-xs text-danger-600 font-normal ml-1">tanggal sudah lewat</span>@endif
                     </p>
+
+                    {{-- Jenis layanan --}}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs px-2.5 py-1 rounded-full font-medium {{ $r->wants_delivery ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-600' }}">
+                            {{ $r->mode_label }}
+                        </span>
+                        <span class="text-xs text-gray-400">
+                            {{ $r->wants_delivery ? 'diantar kembali setelah selesai' : 'diambil sendiri di toko setelah selesai' }}
+                        </span>
+                    </div>
+
+                    {{-- Layanan yang diminta --}}
+                    <div class="rounded-xl bg-gray-50 p-3">
+                        <p class="text-xs text-gray-400 mb-1">Layanan yang diminta (perkiraan pelanggan)</p>
+                        @forelse($r->items as $it)
+                            <div class="flex justify-between gap-3 py-0.5">
+                                <span class="text-gray-800">{{ $it->service_name }}</span>
+                                <span class="text-gray-500 whitespace-nowrap">{{ $it->qty_label }}</span>
+                            </div>
+                        @empty
+                            <p class="text-xs text-gray-400">Pelanggan belum memilih layanan (permintaan lama).</p>
+                        @endforelse
+                    </div>
+
                     <p class="text-gray-600 whitespace-pre-line">{{ $r->address }}</p>
                     @if($r->notes)
                         <p class="text-xs text-gray-400">Catatan pelanggan: {{ $r->notes }}</p>
@@ -84,15 +108,15 @@
                 <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t">
                     @if($r->status === 'menunggu')
                         @unless($overdue)
-                            <button type="button" @click="mode = mode === 'confirm' ? null : 'confirm'"
+                            <button type="button" @click="panel = panel === 'confirm' ? null : 'confirm'"
                                     class="bg-brand-600 text-white rounded-xl px-4 py-2 text-sm font-medium">Konfirmasi</button>
                         @endunless
-                        <button type="button" @click="mode = mode === 'reject' ? null : 'reject'"
+                        <button type="button" @click="panel = panel === 'reject' ? null : 'reject'"
                                 class="border border-danger-200 text-danger-600 rounded-xl px-4 py-2 text-sm">Tolak</button>
                     @else
                         <a href="{{ route('transactions.create', ['pickup_request' => $r->id]) }}"
                            class="bg-brand-600 text-white rounded-xl px-4 py-2 text-sm font-medium">Buat Transaksi</a>
-                        <button type="button" @click="mode = mode === 'reject' ? null : 'reject'"
+                        <button type="button" @click="panel = panel === 'reject' ? null : 'reject'"
                                 class="border border-danger-200 text-danger-600 rounded-xl px-4 py-2 text-sm">Batalkan Permintaan</button>
                     @endif
 
@@ -101,14 +125,14 @@
                     @endif
                 </div>
 
-                <form method="POST" action="{{ route('pickup-requests.confirm', $r) }}" x-show="mode === 'confirm'" x-cloak class="mt-3 space-y-2">
+                <form method="POST" action="{{ route('pickup-requests.confirm', $r) }}" x-show="panel === 'confirm'" x-cloak class="mt-3 space-y-2">
                     @csrf @method('PATCH')
                     <input type="text" name="staff_note" maxlength="300" placeholder="Catatan untuk pelanggan (opsional), misalnya: kurir datang sekitar jam 9"
                            class="w-full border-gray-200 rounded-xl text-sm">
                     <button class="bg-brand-600 text-white rounded-xl px-4 py-2 text-sm font-medium">Simpan Konfirmasi</button>
                 </form>
 
-                <form method="POST" action="{{ route('pickup-requests.reject', $r) }}" x-show="mode === 'reject'" x-cloak class="mt-3 space-y-2"
+                <form method="POST" action="{{ route('pickup-requests.reject', $r) }}" x-show="panel === 'reject'" x-cloak class="mt-3 space-y-2"
                       onsubmit="return confirm('Tolak atau batalkan permintaan ini? Alasanmu akan terlihat oleh pelanggan.')">
                     @csrf @method('PATCH')
                     <input type="text" name="staff_note" maxlength="300" required placeholder="Alasan (wajib), misalnya: alamat di luar jangkauan"

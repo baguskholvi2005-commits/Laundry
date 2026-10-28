@@ -204,6 +204,14 @@
                       :checked="$on('promo_stacking_enabled', '0')" />
         </div>
 
+         {{-- Hak akses kasir --}}
+        <div class="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 class="font-semibold mb-4">Hak Akses Kasir</h2>
+            <x-toggle name="cashier_can_cancel" label="Kasir boleh membatalkan transaksi"
+                      hint="Hanya untuk transaksi yang belum ada pembayarannya dan dibuat dalam 2 jam terakhir. Alasan wajib diisi, dan pembatalan tercatat atas nama kasir di Log Aktivitas."
+                      :checked="$on('cashier_can_cancel', '0')" />
+        </div>
+
         {{-- Member --}}
         <div class="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 class="font-semibold mb-4">Kriteria dan Benefit Member</h2>

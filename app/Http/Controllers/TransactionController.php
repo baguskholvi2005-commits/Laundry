@@ -19,7 +19,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
-
 class TransactionController extends Controller
 {
     public function index(Request $request)
@@ -105,8 +104,8 @@ class TransactionController extends Controller
 
     public function create(Request $request)
     {
-        $services = Service::active()->get(['id', 'name', 'type', 'price']);
-
+        $services = Service::active()->get(['id', 'name', 'type', 'price', 'duration_days']);
+        
         $packages = ServicePackage::with('service:id,name,price')
             ->available()
             ->get()
@@ -175,22 +174,49 @@ class TransactionController extends Controller
                 $prefillNote = 'Disalin dari transaksi ' . $source->code . '. Harga memakai harga hari ini. Periksa lagi sebelum menyimpan.';
             }
         } elseif ($request->filled('pickup_request')) {
-            // Dari permintaan jemput pelanggan: pelanggan dan centang Jemput sudah terisi
-            $pr = PickupRequest::with('customer')->find($request->get('pickup_request'));
+            // Dari permintaan jemput pelanggan: pelanggan, layanan, Jemput, dan Antar sudah terisi
+            $pr = PickupRequest::with(['customer', 'items'])->find($request->get('pickup_request'));
 
             if (! $pr || $pr->status !== 'dikonfirmasi') {
                 return redirect()->route('pickup-requests.index')
                     ->with('error', 'Permintaan jemput itu tidak ditemukan atau sudah diproses.');
             }
 
+            $cartItems = [];
+
+            foreach ($pr->items as $item) {
+                $svc = $services->firstWhere('id', $item->service_id);
+
+                if ($svc) {
+                    $cartItems[] = [
+                        'service_id' => $svc->id,
+                        'package_id' => null,
+                        'name' => $svc->name,
+                        'type' => $svc->type,
+                        'price' => (float) $svc->price,
+                        // Berat kiloan yang belum diketahui dibiarkan kosong supaya kasir wajib menimbang
+                        'qty' => $item->qty !== null ? (float) $item->qty : null,
+                    ];
+                }
+            }
+
             $prefill = [
                 'customer' => $this->customerPayload($pr->customer),
-                'items' => [],
+                'items' => $cartItems,
                 'use_pickup' => true,
+                'use_delivery' => $pr->wants_delivery,
             ];
+            $prefillSkipped = $pr->items->count() - count($cartItems);
             $pickupRequestId = $pr->id;
-            $prefillNote = 'Dari permintaan jemput ' . $pr->customer->name . ' (' . $pr->preferred_date->translatedFormat('d M Y')
-                . '). Masukkan cucian yang dijemput. Jemput sudah tercentang otomatis.';
+
+            $prefillNote = 'Dari permintaan ' . strtolower($pr->mode_label) . ' ' . $pr->customer->name
+                . ' (' . $pr->preferred_date->translatedFormat('d M Y') . '). '
+                . ($pr->items->isNotEmpty()
+                    ? 'Layanan dan berat di keranjang hanya perkiraan pelanggan: timbang dulu, lalu sesuaikan. Berat yang masih kosong wajib diisi sebelum menyimpan.'
+                    : 'Pelanggan belum memilih layanan, pilih sesuai cucian yang dijemput.')
+                . ($pr->wants_delivery
+                    ? ' Jemput dan Antar sudah tercentang otomatis.'
+                    : ' Jemput sudah tercentang otomatis, cucian nanti diambil sendiri oleh pelanggan.');
         }
 
         return view('transactions.create', compact(
@@ -302,6 +328,9 @@ class TransactionController extends Controller
             // Transaksi dari permintaan jemput selalu bertanda Jemput
             $usePickup = ($data['use_pickup'] ?? false) || $pickupRequest !== null;
 
+            // Antar hanya berlaku kalau layanan antar masih menyala di Pengaturan
+            $useDelivery = (bool) ($data['use_delivery'] ?? false) && (bool) setting('delivery_enabled');
+
             // Paket: kunci barisnya, cek ketersediaan, lalu kurangi kuota
             $packageQty = collect($items)
                 ->whereNotNull('package_id')
@@ -328,7 +357,7 @@ class TransactionController extends Controller
                 $items,
                 $promos,
                 $usePickup,
-                $data['use_delivery'] ?? false,
+                $useDelivery,
                 $customer
             );
 
@@ -365,7 +394,7 @@ class TransactionController extends Controller
                 'payment_method' => $data['payment_method'] ?? null,
                 'promo_id' => $promos->first()?->id,
                 'use_pickup' => $usePickup,
-                'use_delivery' => $data['use_delivery'] ?? false,
+                'use_delivery' => $useDelivery,
                 'estimated_done_at' => now()->addDays($days),
             ]);
 
@@ -396,7 +425,8 @@ class TransactionController extends Controller
                     'type' => 'delivery',
                     'status' => 'dijadwalkan',
                     'scheduled_at' => $transaction->estimated_done_at,
-                    'address' => $customer?->address,
+                    // Diantar kembali ke alamat yang pelanggan tulis di permintaan jemput
+                    'address' => $pickupRequest?->address ?? $customer?->address,
                 ]);
             }
 
@@ -467,7 +497,7 @@ class TransactionController extends Controller
 
     public function show(Transaction $transaction)
     {
-        $transaction->load(['customer', 'cashier', 'items', 'payments', 'promoUsages.promo', 'pickupDeliveries']);
+        $transaction->load(['customer', 'cashier', 'canceller', 'items', 'payments', 'promoUsages.promo', 'pickupDeliveries']);
         return view('transactions.show', compact('transaction'));
     }
 
@@ -528,16 +558,37 @@ class TransactionController extends Controller
         return back()->with('success', 'Status transaksi diperbarui menjadi ' . str_replace('_', ' ', $request->status) . '.');
     }
 
-    public function cancel(Transaction $transaction)
+    public function cancel(Request $request, Transaction $transaction)
     {
-        $error = DB::transaction(function () use ($transaction) {
+        $user = $request->user();
+        $reason = trim((string) $request->input('reason'));
+
+        if (mb_strlen($reason) < 3) {
+            return back()->with('error', 'Alasan pembatalan wajib diisi (minimal 3 huruf).');
+        }
+
+        $reason = mb_substr($reason, 0, 255);
+
+        $error = DB::transaction(function () use ($transaction, $user, $reason) {
             $trx = Transaction::lockForUpdate()->findOrFail($transaction->id);
 
-            if (in_array($trx->status, ['selesai', 'dibatalkan'])) {
+            if (in_array($trx->status, ['selesai', 'dibatalkan'], true)) {
                 return 'Transaksi berstatus ' . str_replace('_', ' ', $trx->status) . ' tidak dapat dibatalkan.';
             }
 
-            $trx->update(['status' => 'dibatalkan']);
+            if (! $trx->canBeCancelledBy($user)) {
+                return $user->hasRole('pemilik')
+                    ? 'Transaksi ini tidak dapat dibatalkan.'
+                    : 'Kasir hanya bisa membatalkan transaksi yang belum ada pembayarannya, dalam '
+                        . Transaction::CASHIER_CANCEL_HOURS . ' jam pertama, dan hanya kalau diizinkan pemilik di Pengaturan.';
+            }
+
+            $trx->update([
+                'status' => 'dibatalkan',
+                'cancelled_by' => $user->id,
+                'cancelled_at' => now(),
+                'cancel_reason' => $reason,
+            ]);
 
             // Tugas antar-jemput yang belum selesai ikut dibatalkan
             $trx->pickupDeliveries()

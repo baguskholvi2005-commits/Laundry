@@ -14,17 +14,45 @@
             <a href="{{ route('transactions.create', ['from' => $transaction->id]) }}"
                class="border rounded-xl px-4 py-2 text-sm" title="Buat transaksi baru dengan isi yang sama">⧉ Salin ke Transaksi Baru</a>
 
-            @role('pemilik')
-                @if(!in_array($transaction->status, ['selesai', 'dibatalkan']))
-                <form method="POST" action="{{ route('transactions.cancel', $transaction) }}"
-                      onsubmit="return confirm('Batalkan transaksi ini? Tugas antar-jemput yang belum selesai ikut dibatalkan dan kuota promo serta paket dikembalikan.')">
-                    @csrf @method('PATCH')
-                    <button class="border border-danger-200 text-danger-600 rounded-xl px-4 py-2 text-sm">Batalkan</button>
-                </form>
-                @endif
-            @endrole
+             @if($transaction->canBeCancelledBy(auth()->user()))
+                <div x-data="{ open: false }" class="relative">
+                    <button type="button" @click="open = !open"
+                            class="border border-danger-200 text-danger-600 rounded-xl px-4 py-2 text-sm">Batalkan</button>
+
+                    <form method="POST" action="{{ route('transactions.cancel', $transaction) }}"
+                          x-show="open" x-cloak @click.outside="open = false"
+                          onsubmit="return confirm('Batalkan transaksi ini? Tugas antar-jemput yang belum selesai ikut dibatalkan dan kuota promo serta paket dikembalikan.')"
+                          class="absolute right-0 mt-2 z-20 w-72 max-w-[85vw] bg-white border rounded-2xl shadow-lg p-4 space-y-3">
+                        @csrf @method('PATCH')
+                        <label class="text-sm font-medium text-gray-700">Alasan pembatalan <span class="text-danger-500">*</span></label>
+                        <input type="text" name="reason" required minlength="3" maxlength="255"
+                               placeholder="Contoh: salah input berat"
+                               class="w-full border-gray-200 rounded-xl text-sm">
+                        <p class="text-xs text-gray-400">Pembatalan tercatat atas namamu di Log Aktivitas.</p>
+                        <div class="flex gap-2 justify-end">
+                            <button type="button" @click="open = false" class="border rounded-xl px-3 py-2 text-sm">Tutup</button>
+                            <button class="bg-danger-600 text-white rounded-xl px-3 py-2 text-sm font-medium">Batalkan Transaksi</button>
+                        </div>
+                    </form>
+                </div>
+            @endif
         </div>
     </div>
+
+        @if($transaction->status === 'dibatalkan')
+        <div class="bg-danger-50 text-danger-600 rounded-xl px-4 py-3 text-sm mb-6">
+            <p class="font-medium">Transaksi ini dibatalkan.</p>
+            <p>
+                {{ $transaction->canceller ? 'Oleh ' . $transaction->canceller->name : 'Pembatal tidak tercatat' }}
+                @if($transaction->cancelled_at)
+                    pada {{ $transaction->cancelled_at->translatedFormat('d M Y, H:i') }} WIB
+                @endif
+            </p>
+            @if($transaction->cancel_reason)
+                <p>Alasan: {{ $transaction->cancel_reason }}</p>
+            @endif
+        </div>
+    @endif
 
     {{-- Progress Tracker --}}
     <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-6">

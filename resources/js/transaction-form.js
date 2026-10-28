@@ -5,9 +5,11 @@ export default function transactionForm(config) {
         promos: config.promos ?? [],
         stackingEnabled: !!config.stackingEnabled,
         memberDiscountPercent: Number(config.memberDiscountPercent ?? 0),
+        defaultDuration: Number(config.defaultDuration ?? 2),
         pickupRequestId: config.pickupRequestId ?? null,
         tab: 'kiloan',
         cart: [],
+        activeIndex: null,
         customerQuery: '',
         customerResults: [],
         selectedCustomer: null,
@@ -42,44 +44,170 @@ export default function transactionForm(config) {
                 if (config.prefill.use_pickup && this.pickupEnabled) {
                     this.usePickup = true;
                 }
+                if (config.prefill.use_delivery && this.deliveryEnabled) {
+                    this.useDelivery = true;
+                }
             }
+
+            // Baris yang beratnya masih kosong langsung jadi baris aktif
+            const empty = this.cart.findIndex(i => !(Number(i.qty) > 0));
+            this.activeIndex = empty >= 0 ? empty : (this.cart.length ? 0 : null);
+
             this.recalculate();
         },
 
+        // ---------- Baris aktif dan tombol +/- ----------
+        get activeItem() {
+            return this.activeIndex !== null ? (this.cart[this.activeIndex] ?? null) : null;
+        },
+
+        get step() {
+            return this.activeItem?.type === 'kiloan' ? 0.5 : 1;
+        },
+
+        get quickSteps() {
+            return this.activeItem?.type === 'kiloan' ? [0.1, 0.5, 1] : [1, 2, 5];
+        },
+
+        get unitLabel() {
+            const t = this.activeItem?.type;
+            return t === 'kiloan' ? 'Kg' : (t === 'paket' ? 'Paket' : 'Pcs');
+        },
+
+        fmt(n) {
+            return Number(n).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+        },
+
+        fmtQty(item) {
+            const q = Number(item.qty) || 0;
+            if (q <= 0) return item.type === 'kiloan' ? 'berat belum diisi' : 'jumlah belum diisi';
+            if (item.type === 'kiloan') return this.fmt(q) + ' kg';
+            if (item.type === 'paket') return q + ' paket (' + this.fmt((Number(item.weight_kg) || 0) * q) + ' kg)';
+            return this.fmt(q) + ' pcs';
+        },
+
+        lineTotal(item) {
+            return (Number(item.qty) || 0) * item.price;
+        },
+
+        setQty(item, value) {
+            let v = Number(value) || 0;
+
+            if (item.type === 'kiloan') {
+                v = Math.max(0, Math.round(v * 10) / 10);
+            } else {
+                v = Math.max(item.type === 'paket' ? 1 : 0, Math.round(v));
+            }
+
+            item.qty = v;
+            this.recalculate();
+        },
+
+        bump(delta) {
+            const item = this.activeItem;
+            if (!item) return;
+            this.setQty(item, (Number(item.qty) || 0) + delta);
+        },
+
+        selectLine(idx) {
+            this.activeIndex = idx;
+            this.focusWeight();
+        },
+
+        // Fokus ke kolom berat hanya di layar lebar, supaya HP tidak melompat ke bawah
+        focusWeight() {
+            if (!window.matchMedia('(min-width: 1024px)').matches) return;
+
+            this.$nextTick(() => {
+                const el = this.$refs.weightInput;
+                if (el) { el.focus(); el.select(); }
+            });
+        },
+
+        // ---------- Keranjang ----------
+        inCart(service) {
+            return this.cart.some(i => i.service_id === service.id && !i.package_id);
+        },
+
+        cartQtyLabel(service) {
+            const i = this.cart.find(x => x.service_id === service.id && !x.package_id);
+            if (!i) return '';
+            const q = Number(i.qty) || 0;
+            if (q <= 0) return 'isi berat';
+            return this.fmt(q) + (service.type === 'kiloan' ? ' kg' : ' pcs');
+        },
+
+        packageInCart(pkg) {
+            return this.cart.some(i => i.package_id === pkg.id);
+        },
+
+        estimate(service) {
+            const days = Number(service.duration_days) || this.defaultDuration;
+            const d = new Date();
+            d.setDate(d.getDate() + days);
+            const label = days === 1 ? 'Besok' : (days === 2 ? 'Lusa' : days + ' hari');
+            return label + ', ' + d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+        },
+
         addItem(service) {
+            const existing = this.cart.findIndex(i => i.service_id === service.id && !i.package_id);
+
+            if (existing >= 0) {
+                this.activeIndex = existing;
+                // Layanan satuan: klik lagi menambah 1. Kiloan: hanya menjadikannya baris aktif
+                if (service.type === 'satuan') this.bump(1);
+                this.focusWeight();
+                return;
+            }
+
             this.cart.push({
                 service_id: service.id,
                 package_id: null,
                 name: service.name,
                 type: service.type,
                 price: parseFloat(service.price),
-                qty: 1,
+                qty: service.type === 'kiloan' ? 0 : 1,
             });
+
+            this.activeIndex = this.cart.length - 1;
             this.recalculate();
+            this.focusWeight();
         },
 
         addPackage(pkg) {
-            const existing = this.cart.find(i => i.package_id === pkg.id);
+            const existing = this.cart.findIndex(i => i.package_id === pkg.id);
 
-            if (existing) {
-                existing.qty = Number(existing.qty) + 1;
-            } else {
-                this.cart.push({
-                    service_id: null,
-                    package_id: pkg.id,
-                    name: 'Paket ' + pkg.name,
-                    type: 'paket',
-                    price: Number(pkg.package_price),
-                    weight_kg: pkg.weight_kg,
-                    qty: 1,
-                });
+            if (existing >= 0) {
+                this.activeIndex = existing;
+                this.bump(1);
+                return;
             }
 
+            this.cart.push({
+                service_id: null,
+                package_id: pkg.id,
+                name: 'Paket ' + pkg.name,
+                type: 'paket',
+                price: Number(pkg.package_price),
+                weight_kg: pkg.weight_kg,
+                qty: 1,
+            });
+
+            this.activeIndex = this.cart.length - 1;
             this.recalculate();
         },
 
         removeItem(index) {
             this.cart.splice(index, 1);
+
+            if (this.cart.length === 0) {
+                this.activeIndex = null;
+            } else if (this.activeIndex === index) {
+                this.activeIndex = this.cart.length - 1;
+            } else if (this.activeIndex > index) {
+                this.activeIndex--;
+            }
+
             this.recalculate();
         },
 
@@ -90,6 +218,21 @@ export default function transactionForm(config) {
             }
         },
 
+        resetForm() {
+            if (this.cart.length > 0 && !confirm('Kosongkan seluruh isi transaksi ini?')) return;
+
+            this.cart = [];
+            this.activeIndex = null;
+            this.selectedPromoIds = [];
+            this.promoResults = {};
+            this.paidAmount = 0;
+            this.usePickup = this.pickupRequestId !== null;
+            this.useDelivery = false;
+            if (this.pickupRequestId === null) this.selectedCustomer = null;
+            this.recalculate();
+        },
+
+        // ---------- Promo ----------
         // Pilih atau lepas promo. Promo yang boleh digabung bisa dipilih bersamaan (maksimal 2)
         selectPromo(promoId) {
             if (this.selectedPromoIds.includes(promoId)) {
@@ -125,7 +268,31 @@ export default function transactionForm(config) {
             return parts.join(' · ');
         },
 
-        // Angka dihitung server supaya aturan promo, paket, dan member selalu sama dengan saat disimpan
+        get cartWeightKg() {
+            return this.cart.reduce((sum, i) => {
+                if (i.type === 'kiloan') return sum + (Number(i.qty) || 0);
+                if (i.type === 'paket') return sum + (Number(i.weight_kg) || 0) * (Number(i.qty) || 0);
+                return sum;
+            }, 0);
+        },
+
+        // Petunjuk saja. Yang memutuskan promo berlaku atau tidak tetap server
+        promoShortfall(promo) {
+            const parts = [];
+            const minW = Number(promo.min_weight) || 0;
+            const minT = Number(promo.min_transaction) || 0;
+
+            if (minW > 0 && this.cartWeightKg + 1e-9 < minW) {
+                parts.push('Kurang ' + this.fmt(minW - this.cartWeightKg) + ' kg');
+            }
+            if (minT > 0 && this.subtotal + 1e-9 < minT) {
+                parts.push('Kurang Rp ' + Math.ceil(minT - this.subtotal).toLocaleString('id-ID'));
+            }
+
+            return parts.join(' · ');
+        },
+
+        // ---------- Hitung ulang di server ----------
         async recalculate() {
             this.subtotal = this.cart.reduce((sum, i) => sum + (Number(i.qty) * i.price), 0);
 
@@ -190,6 +357,7 @@ export default function transactionForm(config) {
             }
         },
 
+        // ---------- Pelanggan ----------
         async searchCustomer(q) {
             this.customerQuery = q;
             if (!q) { this.customerResults = []; return; }
@@ -202,6 +370,12 @@ export default function transactionForm(config) {
             this.customerResults = [];
             this.customerQuery = '';
             this.recalculate();
+        },
+
+        clearCustomer() {
+            this.selectedCustomer = null;
+            this.recalculate();
+            this.$nextTick(() => this.$refs.customerInput?.focus());
         },
 
         openQuickAdd() {
@@ -240,11 +414,31 @@ export default function transactionForm(config) {
             }
         },
 
+        // ---------- Pembayaran ----------
         get change() {
             return Math.max(0, (Number(this.paidAmount) || 0) - this.total);
         },
 
-        async submit() {
+        get shortfall() {
+            const paid = Number(this.paidAmount) || 0;
+            return paid > 0 && paid < this.total ? this.total - paid : 0;
+        },
+
+        // Uang pas, lalu pecahan terdekat di atas total
+        get cashSuggestions() {
+            const t = Math.ceil(this.total);
+            if (t <= 0) return [];
+
+            const out = [t];
+            [5000, 10000, 20000, 50000, 100000].forEach(step => {
+                const v = Math.ceil(t / step) * step;
+                if (!out.includes(v)) out.push(v);
+            });
+
+            return out.slice(0, 4);
+        },
+
+        async submit(asDebt = false) {
             if (this.cart.length === 0) {
                 alert('Pilih minimal satu layanan.');
                 return;
@@ -252,6 +446,11 @@ export default function transactionForm(config) {
 
             if (this.cart.some(i => !(Number(i.qty) > 0))) {
                 alert('Berat atau jumlah laundry wajib diisi.');
+                return;
+            }
+
+            if (asDebt && !this.selectedCustomer &&
+                !confirm('Transaksi ini tidak punya pelanggan terdaftar, jadi tagihannya sulit ditagih. Tetap simpan sebagai tagihan?')) {
                 return;
             }
 
@@ -269,7 +468,7 @@ export default function transactionForm(config) {
                 use_delivery: this.useDelivery,
                 pickup_request_id: this.pickupRequestId,
                 payment_method: this.paymentMethod,
-                paid_amount: Number(this.paidAmount) || 0,
+                paid_amount: asDebt ? 0 : (Number(this.paidAmount) || 0),
             };
 
             try {
