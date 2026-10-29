@@ -8,43 +8,71 @@ use Illuminate\Validation\ValidationException;
 
 class CustomerController extends Controller
 {
+    private const STATUSES = ['member', 'rekomendasi', 'reguler', 'akses'];
+    private const SORTS = ['belanja', 'transaksi', 'nama'];
+
     public function index(Request $request)
     {
-        $filter = in_array($request->get('filter'), ['member', 'rekomendasi', 'aktif'])
-            ? $request->get('filter')
-            : 'semua';
+        $status = $this->pick($request, 'status', self::STATUSES, 'semua');
+        $sort = $this->pick($request, 'sort', self::SORTS, 'terbaru');
 
-        $query = Customer::query()
-            ->withCount(['transactions as active_transactions_count' => fn ($q) => $q->notCancelled()])
-            ->withSum(['transactions as active_spent' => fn ($q) => $q->notCancelled()], 'total')
-            ->when($request->q, function ($query) use ($request) {
-                $query->where(function ($sub) use ($request) {
-                    $sub->where('name', 'like', "%{$request->q}%")
-                        ->orWhere('phone', 'like', "%{$request->q}%");
-                });
-            });
+        $customers = $this->filteredQuery($request)->paginate(15)->withQueryString();
 
-        if ($filter === 'member') {
-            $query->where('is_member', true);
-        } elseif ($filter === 'rekomendasi') {
-            $minTrx = (int) setting('member_min_transactions', 999999);
-            $minSpent = (float) setting('member_min_spent', 999999999999);
+        $total = Customer::count();
+        $members = Customer::where('is_member', true)->count();
 
-            $query->where('is_member', false)->where(function ($q) use ($minTrx, $minSpent) {
-                $q->whereRaw('(select count(*) from transactions t where t.customer_id = customers.id and t.status != ?) >= ?', ['dibatalkan', $minTrx])
-                  ->orWhereRaw('(select coalesce(sum(t.total), 0) from transactions t where t.customer_id = customers.id and t.status != ?) >= ?', ['dibatalkan', $minSpent]);
-            });
-        }
+        $stats = [
+            'total' => $total,
+            'new_month' => Customer::where('created_at', '>=', today()->startOfMonth())->count(),
+            'members' => $members,
+            'member_share' => $total > 0 ? (int) round(($members / $total) * 100) : 0,
+            'eligible' => $this->applyEligibility(Customer::query()->where('is_member', false), true)->count(),
+            'online' => Customer::whereNotNull('password')->count(),
+        ];
 
-        if ($filter === 'aktif') {
-            $query->orderByDesc('active_transactions_count')->orderByDesc('active_spent');
-        } else {
-            $query->latest();
-        }
+        return view('customers.index', compact('customers', 'status', 'sort', 'stats'));
+    }
 
-        $customers = $query->paginate(15)->withQueryString();
+    // Ekspor mengikuti pencarian, filter, dan urutan yang sedang aktif. Khusus pemilik (route-nya yang membatasi)
+    public function export(Request $request)
+    {
+        $query = $this->filteredQuery($request);
+        $filename = 'pelanggan-' . now()->format('Ymd-His') . '.csv';
 
-        return view('customers.index', compact('customers', 'filter'));
+        // Sel yang diawali = + - @ bisa dijalankan Excel sebagai rumus, jadi diberi awalan
+        $safe = function ($value) {
+            $value = (string) $value;
+
+            return $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)
+                ? "'" . $value
+                : $value;
+        };
+
+        return response()->streamDownload(function () use ($query, $safe) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // supaya Excel membaca huruf dan tanda baca dengan benar
+
+            // Titik koma karena Excel berbahasa Indonesia memakainya sebagai pemisah kolom
+            $put = fn (array $row) => fputcsv($out, $row, ';', '"', '\\');
+
+            $put(['Nama', 'No. HP', 'Alamat', 'Status', 'Jumlah Transaksi', 'Total Belanja (Rp)', 'Akses Online', 'Bergabung']);
+
+            foreach ($query->cursor() as $c) {
+                $put([
+                    $safe($c->name),
+                    // Dibungkus rumus teks supaya Excel tidak membuang angka 0 di depan atau memakai notasi ilmiah
+                    $c->phone_normalized ? '="0' . substr($c->phone_normalized, 2) . '"' : $safe($c->phone),
+                    $safe($c->address),
+                    $c->is_member ? 'Member' : ($c->is_eligible_for_member ? 'Layak jadi member' : 'Reguler'),
+                    (int) $c->active_transactions_count,
+                    (int) round((float) $c->active_spent),
+                    $c->password !== null ? 'Ya' : 'Tidak',
+                    $c->created_at?->format('Y-m-d'),
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     // Dipanggil dari halaman Transaksi Baru
@@ -157,5 +185,84 @@ class CustomerController extends Controller
         $customer->update(['is_member' => true]);
 
         return back()->with('success', "{$customer->name} berhasil dijadikan member!");
+    }
+
+    // ---------- Bantuan ----------
+
+    private function pick(Request $request, string $key, array $allowed, string $default): string
+    {
+        $value = $request->get($key);
+
+        return is_string($value) && in_array($value, $allowed, true) ? $value : $default;
+    }
+
+    // Layak jadi member = sudah memenuhi jumlah transaksi ATAU total belanja (transaksi batal tidak dihitung)
+    private function applyEligibility($query, bool $eligible)
+    {
+        $minTrx = (int) setting('member_min_transactions', 999999);
+        $minSpent = (float) setting('member_min_spent', 999999999999);
+
+        $count = '(select count(*) from transactions t where t.customer_id = customers.id and t.status != ?)';
+        $spent = '(select coalesce(sum(t.total), 0) from transactions t where t.customer_id = customers.id and t.status != ?)';
+
+        if ($eligible) {
+            return $query->where(function ($q) use ($count, $spent, $minTrx, $minSpent) {
+                $q->whereRaw($count . ' >= ?', ['dibatalkan', $minTrx])
+                  ->orWhereRaw($spent . ' >= ?', ['dibatalkan', $minSpent]);
+            });
+        }
+
+        return $query
+            ->whereRaw($count . ' < ?', ['dibatalkan', $minTrx])
+            ->whereRaw($spent . ' < ?', ['dibatalkan', $minSpent]);
+    }
+
+    private function filteredQuery(Request $request)
+    {
+        $status = $this->pick($request, 'status', self::STATUSES, 'semua');
+        $sort = $this->pick($request, 'sort', self::SORTS, 'terbaru');
+        $q = is_string($request->get('q')) ? trim($request->get('q')) : '';
+
+        $query = Customer::query()
+            ->withCount(['transactions as active_transactions_count' => fn ($t) => $t->notCancelled()])
+            ->withSum(['transactions as active_spent' => fn ($t) => $t->notCancelled()], 'total');
+
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            // Nomor yang diketik 0812... juga cocok dengan nomor tersimpan 62812..., dengan atau tanpa tanda hubung
+            $digits = ltrim((string) preg_replace('/\D/', '', $q), '0');
+
+            $query->where(function ($sub) use ($like, $digits) {
+                $sub->where('name', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhere('address', 'like', $like);
+
+                if (strlen($digits) >= 3) {
+                    $sub->orWhere('phone_normalized', 'like', '%' . $digits . '%');
+                }
+            });
+        }
+
+        if ($status === 'member') {
+            $query->where('is_member', true);
+        } elseif ($status === 'rekomendasi') {
+            $this->applyEligibility($query->where('is_member', false), true);
+        } elseif ($status === 'reguler') {
+            $this->applyEligibility($query->where('is_member', false), false);
+        } elseif ($status === 'akses') {
+            $query->whereNotNull('password');
+        }
+
+        if ($sort === 'belanja') {
+            $query->orderByDesc('active_spent')->orderBy('name');
+        } elseif ($sort === 'transaksi') {
+            $query->orderByDesc('active_transactions_count')->orderByDesc('active_spent');
+        } elseif ($sort === 'nama') {
+            $query->orderBy('name');
+        } else {
+            $query->orderByDesc('created_at');
+        }
+
+        return $query->orderByDesc('id');
     }
 }

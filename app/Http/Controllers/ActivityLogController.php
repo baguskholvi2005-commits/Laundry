@@ -16,7 +16,7 @@ class ActivityLogController extends Controller
         'keuangan' => ['Pengeluaran', ['expense_created', 'expense_changed']],
         'data' => ['Pelanggan, layanan, promo', ['customer_changed', 'service_changed', 'promo_changed']],
         'akses' => ['Pengguna dan pengaturan', ['user_changed', 'customer_access', 'settings_changed']],
-        'jemput' => ['Permintaan jemput', ['pickup_request']],
+        'jemput' => ['Antar-jemput', ['pickup_request', 'pickup_task']],
         'sistem' => ['Cadangan', ['backup']],
     ];
 

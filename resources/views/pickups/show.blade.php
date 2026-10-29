@@ -1,41 +1,88 @@
 <x-layouts.app-layout>
-    <x-slot name="header"><h1 class="text-lg font-semibold">Detail Antar-Jemput</h1></x-slot>
+    <x-slot name="header"><span class="font-semibold text-gray-900">Detail Antar-Jemput</span></x-slot>
 
-    <div class="max-w-2xl bg-white rounded-2xl border border-gray-100 p-6">
-        <div class="flex justify-between items-start mb-4">
-            <div>
-                <h2 class="text-xl font-bold">{{ $pickup->transaction->customer->name ?? 'Pelanggan Umum' }}</h2>
-                <p class="text-sm text-gray-400">{{ $pickup->transaction->code }}</p>
+    @php
+        $trx = $pickup->transaction;
+        $cust = $trx->customer;
+        $isDelivery = $pickup->type === 'delivery';
+        $remaining = max(0, (float) $trx->total - (float) $trx->paid_amount);
+        $active = in_array($pickup->status, ['dijadwalkan', 'dalam_perjalanan'], true);
+        $kgTotal = $trx->items->where('unit_type', 'kg')->sum('qty');
+        $rp = fn ($n) => 'Rp ' . number_format($n, 0, ',', '.');
+    @endphp
+
+    <a href="{{ route('pickups.index') }}" class="text-sm text-gray-400 hover:text-gray-600">← Antar-Jemput</a>
+
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-3 mt-2 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ $isDelivery ? 'Antar cucian bersih' : 'Jemput cucian' }}</h1>
+            <p class="text-gray-500">
+                Nota <a href="{{ route('transactions.show', $trx) }}" class="text-brand-600 font-medium">{{ $trx->code }}</a>
+                · transaksi {{ ucwords(str_replace('_', ' ', $trx->status)) }}
+            </p>
+        </div>
+        <x-badge :status="$pickup->status" />
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-white rounded-2xl border border-gray-100 p-5">
+                <h2 class="font-semibold mb-3">Pelanggan dan alamat</h2>
+                <p class="font-semibold text-gray-900">
+                    @if($cust)<a href="{{ route('customers.show', $cust) }}" class="hover:text-brand-600">{{ $cust->name }}</a>@else Pelanggan Umum @endif
+                </p>
+                @if($cust?->phone)
+                    <p class="text-sm text-gray-500">
+                        {{ $cust->phone }}
+                        @if($cust->phone_normalized)<a href="https://wa.me/{{ $cust->phone_normalized }}" target="_blank" class="ml-2 text-xs bg-brand-50 text-brand-700 rounded-md px-2 py-0.5 font-medium">Chat WA</a>@endif
+                    </p>
+                @endif
+                <p class="text-sm text-gray-700 mt-3 whitespace-pre-line">{{ $pickup->address ?: 'Alamat belum diisi' }}</p>
+                @if($pickup->scheduled_at)
+                    <p class="text-xs text-gray-400 mt-2">Dijadwalkan {{ $pickup->scheduled_at->translatedFormat('d M Y, H:i') }} WIB</p>
+                @endif
+
+                @if($linkedRequest)
+                    <div class="rounded-xl bg-gray-50 p-3 mt-4 text-sm">
+                        <p class="text-xs text-gray-400 mb-1">Dari permintaan pelanggan</p>
+                        <p>{{ $linkedRequest->mode_label }} · {{ $linkedRequest->preferred_date->translatedFormat('d M Y') }} · {{ $linkedRequest->slot_label }}</p>
+                        @if($linkedRequest->notes)<p class="text-gray-600 mt-1">Catatan: {{ $linkedRequest->notes }}</p>@endif
+                    </div>
+                @endif
+                @if($trx->notes)
+                    <p class="rounded-xl bg-brand-50 text-sm text-gray-700 px-3 py-2 mt-3"><span class="font-semibold">Catatan transaksi:</span> {{ $trx->notes }}</p>
+                @endif
             </div>
-            <x-badge :status="$pickup->status" />
+
+            <div class="bg-white rounded-2xl border border-gray-100 p-5">
+                <h2 class="font-semibold mb-3">Cucian @if($kgTotal > 0)<span class="text-sm font-normal text-gray-500">· {{ rtrim(rtrim(number_format((float) $kgTotal, 1, ',', '.'), '0'), ',') }} kg</span>@endif</h2>
+                @foreach($trx->items as $item)
+                    <div class="flex justify-between py-2 border-b border-gray-100 last:border-0 text-sm">
+                        <span>{{ $item->service_name }}</span>
+                        <span class="text-gray-500">{{ (float) $item->qty }} {{ $item->unit_type }}</span>
+                    </div>
+                @endforeach
+            </div>
         </div>
 
-        <div class="space-y-3 text-sm">
-            <div class="flex justify-between"><span class="text-gray-500">Tipe</span><span class="font-medium">{{ $pickup->type === 'pickup' ? 'Jemput' : 'Antar' }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Alamat</span><span class="font-medium text-right">{{ $pickup->address ?? '-' }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Jadwal</span><span class="font-medium">{{ $pickup->scheduled_at?->translatedFormat('d M Y, H:i') ?? '-' }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Total Tagihan</span><span class="font-medium">Rp {{ number_format($pickup->transaction->total, 0, ',', '.') }}</span></div>
-        </div>
+        <div class="space-y-6">
+            <div class="bg-white rounded-2xl border border-gray-100 p-5">
+                <h2 class="font-semibold mb-3">Tagihan</h2>
+                <div class="flex justify-between text-sm"><span class="text-gray-500">Total</span><span class="font-semibold">{{ $rp($trx->total) }}</span></div>
+                <div class="flex justify-between text-sm mt-1"><span class="text-gray-500">Sudah dibayar</span><span>{{ $rp($trx->paid_amount) }}</span></div>
+                @if($remaining > 0)
+                    <p class="rounded-xl bg-gold-50 text-warning-700 text-sm font-semibold px-3 py-2 mt-3">Sisa {{ $rp($remaining) }}</p>
+                @else
+                    <p class="rounded-xl bg-success-50 text-success-700 text-sm font-semibold px-3 py-2 mt-3">Lunas</p>
+                @endif
+            </div>
 
-        <div class="mt-6 pt-4 border-t">
-            <h3 class="font-semibold mb-2 text-sm">Item Laundry</h3>
-            @foreach($pickup->transaction->items as $item)
-                <div class="flex justify-between text-sm py-1">
-                    <span>{{ $item->service_name }} ({{ $item->qty }} {{ $item->unit_type }})</span>
-                    <span>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</span>
+            @if($active)
+                <div class="bg-white rounded-2xl border border-gray-100 p-5">
+                    <h2 class="font-semibold mb-3">Tindakan</h2>
+                    @include('pickups._actions', ['task' => $pickup, 'trx' => $trx])
                 </div>
-            @endforeach
+            @endif
         </div>
-
-        <form method="POST" action="{{ route('pickups.updateStatus', $pickup) }}" class="mt-6 flex gap-2">
-            @csrf @method('PATCH')
-            <select name="status" class="flex-1 border-gray-200 rounded-xl text-sm">
-                <option value="dijadwalkan" {{ $pickup->status === 'dijadwalkan' ? 'selected' : '' }}>Dijadwalkan</option>
-                <option value="dalam_perjalanan" {{ $pickup->status === 'dalam_perjalanan' ? 'selected' : '' }}>Dalam Perjalanan</option>
-                <option value="selesai" {{ $pickup->status === 'selesai' ? 'selected' : '' }}>Selesai</option>
-                <option value="dibatalkan" {{ $pickup->status === 'dibatalkan' ? 'selected' : '' }}>Dibatalkan</option>
-            </select>
-            <button class="bg-brand-600 text-white px-5 rounded-xl text-sm font-medium">Update</button>
-        </form>
     </div>
 </x-layouts.app-layout>

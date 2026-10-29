@@ -170,9 +170,25 @@ class TransactionController extends Controller
                 }
 
                 $prefill = ['customer' => $this->customerPayload($source->customer), 'items' => $cartItems];
-                $prefillSkipped = $source->items->count() - count($cartItems);
+                $prefillSkipped = count($source->items) - count($cartItems);
                 $prefillNote = 'Disalin dari transaksi ' . $source->code . '. Harga memakai harga hari ini. Periksa lagi sebelum menyimpan.';
             }
+        } elseif ($request->integer('customer') > 0 || $request->boolean('pickup')) {
+            // Dari daftar pelanggan atau tombol "Jadwalkan Jemput Baru": pelanggan dan/atau Jemput sudah terisi, keranjang kosong
+            $selected = $request->integer('customer') > 0 ? Customer::find($request->integer('customer')) : null;
+            $wantsPickup = $request->boolean('pickup');
+
+            $prefill = [
+                'customer' => $this->customerPayload($selected),
+                'items' => [],
+                'use_pickup' => $wantsPickup,
+            ];
+
+            $prefillNote = $wantsPickup
+                ? 'Jadwal jemput baru: pilih pelanggan, isi cucian yang akan dijemput, dan pastikan alamat pelanggan sudah terisi. Jemput sudah tercentang.'
+                : ($selected
+                    ? 'Transaksi baru untuk ' . $selected->name . '.'
+                    : 'Pelanggan tidak ditemukan, cari lagi di kolom pelanggan.');
         } elseif ($request->filled('pickup_request')) {
             // Dari permintaan jemput pelanggan: pelanggan, layanan, Jemput, dan Antar sudah terisi
             $pr = PickupRequest::with(['customer', 'items'])->find($request->get('pickup_request'));
@@ -206,12 +222,12 @@ class TransactionController extends Controller
                 'use_pickup' => true,
                 'use_delivery' => $pr->wants_delivery,
             ];
-            $prefillSkipped = $pr->items->count() - count($cartItems);
+            $prefillSkipped = count($pr->items) - count($cartItems);
             $pickupRequestId = $pr->id;
 
             $prefillNote = 'Dari permintaan ' . strtolower($pr->mode_label) . ' ' . $pr->customer->name
                 . ' (' . $pr->preferred_date->translatedFormat('d M Y') . '). '
-                . ($pr->items->isNotEmpty()
+                . (count($pr->items) > 0
                     ? 'Layanan dan berat di keranjang hanya perkiraan pelanggan: timbang dulu, lalu sesuaikan. Berat yang masih kosong wajib diisi sebelum menyimpan.'
                     : 'Pelanggan belum memilih layanan, pilih sesuai cucian yang dijemput.')
                 . ($pr->wants_delivery
