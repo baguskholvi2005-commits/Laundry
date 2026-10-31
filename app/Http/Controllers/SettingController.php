@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\BusinessSetting;
+use App\Models\Customer;
+use App\Models\Transaction;
+use App\Models\TransactionItem;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Models\ActivityLog;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class SettingController extends Controller
 {
@@ -18,7 +23,10 @@ class SettingController extends Controller
     public function update(Request $request)
     {
         $data = $request->validate([
+            'active_tab' => 'nullable|string|max:20',
+
             'business_name' => 'required|string|max:100',
+            'business_tagline' => 'nullable|string|max:120',
             'business_address' => 'nullable|string|max:255',
             'business_whatsapp' => 'nullable|string|max:25',
             'business_logo' => 'nullable|image|mimes:png,jpg,jpeg|max:1024',
@@ -36,6 +44,7 @@ class SettingController extends Controller
             'invoice_prefix' => 'required|alpha_num|max:6',
             'invoice_date_format' => 'required|in:ymd,ym,y,none',
             'invoice_digits' => 'required|integer|between:3,5',
+            'nota_footer' => 'nullable|string|max:300',
 
             'payment_methods' => 'required|array|min:1',
             'payment_methods.*' => 'in:cash,transfer,qris,ewallet',
@@ -53,8 +62,9 @@ class SettingController extends Controller
         }
 
         $values = [
-            'business_name' => $data['business_name'],
-            'business_address' => $data['business_address'] ?? '',
+            'business_name' => trim($data['business_name']),
+            'business_tagline' => trim((string) ($data['business_tagline'] ?? '')),
+            'business_address' => trim((string) ($data['business_address'] ?? '')),
             'business_whatsapp' => $wa,
 
             'operating_open' => $data['operating_open'] ?? '',
@@ -72,13 +82,14 @@ class SettingController extends Controller
             'invoice_prefix' => strtoupper($data['invoice_prefix']),
             'invoice_date_format' => $data['invoice_date_format'],
             'invoice_digits' => $data['invoice_digits'],
+            'nota_footer' => trim((string) ($data['nota_footer'] ?? '')),
+            'nota_show_qr' => $request->boolean('nota_show_qr') ? '1' : '0',
 
             'payment_methods' => implode(',', array_unique($data['payment_methods'])),
-            'payment_info' => $data['payment_info'] ?? '',
+            'payment_info' => trim((string) ($data['payment_info'] ?? '')),
 
             'promo_stacking_enabled' => $request->boolean('promo_stacking_enabled') ? '1' : '0',
             'cashier_can_cancel' => $request->boolean('cashier_can_cancel') ? '1' : '0',
-
 
             'member_min_transactions' => $data['member_min_transactions'],
             'member_min_spent' => $data['member_min_spent'],
@@ -98,7 +109,7 @@ class SettingController extends Controller
             $values['business_logo'] = '';
         }
 
-                // Catat apa saja yang berubah (nama pengaturannya saja, bukan isinya)
+        // Catat apa saja yang berubah (nama pengaturannya saja, bukan isinya)
         $before = BusinessSetting::pluck('value', 'key');
 
         foreach ($values as $key => $value) {
@@ -106,16 +117,17 @@ class SettingController extends Controller
         }
 
         $names = [
-            'business_name' => 'nama laundry', 'business_address' => 'alamat', 'business_whatsapp' => 'nomor WhatsApp',
-            'business_logo' => 'logo', 'operating_open' => 'jam buka', 'operating_close' => 'jam tutup',
-            'operating_days' => 'hari buka', 'pickup_enabled' => 'layanan jemput', 'delivery_enabled' => 'layanan antar',
-            'pickup_fee' => 'biaya jemput', 'delivery_fee' => 'biaya antar', 'free_ongkir_enabled' => 'gratis ongkir otomatis',
-            'free_ongkir_min_weight' => 'minimal berat gratis ongkir', 'work_duration_days' => 'estimasi pengerjaan umum',
-            'invoice_prefix' => 'awalan nomor transaksi', 'invoice_date_format' => 'format tanggal nomor transaksi',
-            'invoice_digits' => 'jumlah angka nomor transaksi', 'payment_methods' => 'metode pembayaran',
+            'business_name' => 'nama laundry', 'business_tagline' => 'slogan', 'business_address' => 'alamat',
+            'business_whatsapp' => 'nomor WhatsApp', 'business_logo' => 'logo', 'operating_open' => 'jam buka',
+            'operating_close' => 'jam tutup', 'operating_days' => 'hari buka', 'pickup_enabled' => 'layanan jemput',
+            'delivery_enabled' => 'layanan antar', 'pickup_fee' => 'biaya jemput', 'delivery_fee' => 'biaya antar',
+            'free_ongkir_enabled' => 'gratis ongkir otomatis', 'free_ongkir_min_weight' => 'minimal berat gratis ongkir',
+            'work_duration_days' => 'estimasi pengerjaan umum', 'invoice_prefix' => 'awalan nomor transaksi',
+            'invoice_date_format' => 'format tanggal nomor transaksi', 'invoice_digits' => 'jumlah angka nomor transaksi',
+            'nota_footer' => 'catatan kaki nota', 'nota_show_qr' => 'QR di nota', 'payment_methods' => 'metode pembayaran',
             'payment_info' => 'info pembayaran', 'promo_stacking_enabled' => 'penggabungan promo',
-            'member_min_transactions' => 'syarat transaksi member', 'member_min_spent' => 'syarat belanja member',
-            'member_discount_percent' => 'diskon member', 'cashier_can_cancel' => 'izin kasir membatalkan transaksi',
+            'cashier_can_cancel' => 'izin kasir membatalkan transaksi', 'member_min_transactions' => 'syarat transaksi member',
+            'member_min_spent' => 'syarat belanja member', 'member_discount_percent' => 'diskon member',
         ];
 
         $changed = collect($values)
@@ -132,6 +144,42 @@ class SettingController extends Controller
             ActivityLog::record('settings_changed', 'mengubah pengaturan: ' . $changed->join(', '));
         }
 
-        return back()->with('success', 'Pengaturan berhasil disimpan.');
+        return back()
+            ->with('success', 'Pengaturan berhasil disimpan.')
+            ->with('tab', $request->input('active_tab'));
+    }
+
+    // Nota contoh memakai pengaturan yang sudah tersimpan. Tidak membuat transaksi apa pun
+    public function sampleNota(Request $request)
+    {
+        [$prefix, $dateFormat, $digits] = invoice_format();
+        $code = $prefix . '-' . ($dateFormat !== 'none' ? now()->format($dateFormat) . '-' : '') . str_pad('1', $digits, '0', STR_PAD_LEFT);
+
+        $transaction = new Transaction([
+            'code' => $code,
+            'subtotal' => 39500,
+            'discount' => 0,
+            'delivery_fee' => 0,
+            'total' => 39500,
+            'paid_amount' => 20000,
+            'payment_status' => 'dp',
+            'status' => 'diproses',
+            'estimated_done_at' => now()->addDays((int) setting('work_duration_days', 2)),
+        ]);
+        $transaction->created_at = now();
+
+        $transaction->setRelation('customer', new Customer(['name' => 'Bu Siti Aminah', 'phone' => '0812-3456-7890']));
+        $transaction->setRelation('cashier', $request->user());
+        $transaction->setRelation('items', collect([
+            new TransactionItem(['service_name' => 'Cuci Komplit', 'unit_type' => 'kg', 'qty' => 3.5, 'price_per_unit' => 7000, 'subtotal' => 24500]),
+            new TransactionItem(['service_name' => 'Selimut', 'unit_type' => 'pcs', 'qty' => 1, 'price_per_unit' => 15000, 'subtotal' => 15000]),
+        ]));
+
+        $qrCodeSvg = QrCode::size(120)->generate(route('tracking.show', 'contoh'));
+
+        $pdf = Pdf::loadView('transactions.nota', ['transaction' => $transaction, 'qrCodeSvg' => $qrCodeSvg, 'sample' => true])
+            ->setPaper([0, 0, 226.77, 800], 'portrait');
+
+        return $pdf->stream('contoh-nota.pdf');
     }
 }

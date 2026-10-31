@@ -62,7 +62,7 @@
             </button>
 
             <div class="flex-1 min-w-0 flex items-center gap-2">
-                <span class="hidden sm:inline text-[11px] font-semibold tracking-widest text-brand-700 uppercase">Aplikasi Kasir</span>
+                <span class="hidden sm:inline text-[11px] font-semibold tracking-widest text-brand-700 uppercase">{{ setting('business_name', 'Laundry Desa') }}</span>
                 <span class="hidden sm:inline text-gray-300">/</span>
                 <div class="min-w-0 truncate text-sm text-gray-700">{{ $header ?? '' }}</div>
             </div>

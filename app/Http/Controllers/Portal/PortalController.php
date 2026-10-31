@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class PortalController extends Controller
 {
-    public function home(Request $request)
+        public function home(Request $request)
     {
         $customer = $request->user('customer');
         $base = $customer->transactions()->notCancelled();
@@ -19,6 +19,7 @@ class PortalController extends Controller
         $totalTransactions = (clone $base)->count();
         $totalSpent = (float) (clone $base)->sum('total');
         $totalSaved = (float) (clone $base)->sum('discount');
+        $monthSaved = (float) (clone $base)->where('created_at', '>=', today()->startOfMonth())->sum('discount');
 
         // Progres menuju syarat member (jumlah transaksi ATAU total belanja)
         $minTrx = max(1, (int) setting('member_min_transactions', 5));
@@ -37,6 +38,12 @@ class PortalController extends Controller
             ->latest()
             ->get();
 
+        $recent = (clone $base)->where('status', 'selesai')
+            ->with('items')
+            ->latest()
+            ->take(3)
+            ->get();
+
         $promos = Promo::where('is_active', true)
             ->whereDate('start_date', '<=', today())
             ->whereDate('end_date', '>=', today())
@@ -47,9 +54,9 @@ class PortalController extends Controller
             ->map(fn ($p) => $this->describePromo($p));
 
         return view('portal.home', compact(
-            'customer', 'totalTransactions', 'totalSpent', 'totalSaved',
+            'customer', 'totalTransactions', 'totalSpent', 'totalSaved', 'monthSaved',
             'minTrx', 'minSpent', 'remainingTrx', 'remainingSpent', 'progress', 'eligible',
-            'active', 'promos'
+            'active', 'recent', 'promos'
         ));
     }
 

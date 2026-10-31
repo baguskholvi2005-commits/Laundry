@@ -1,3 +1,4 @@
+@props(['title' => 'Akun Pelanggan', 'wide' => false])
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -5,23 +6,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
-    <title>{{ $title ?? 'Akun Pelanggan' }} · {{ setting('business_name', 'Laundry Desa') }}</title>
+    <title>{{ $title }} · {{ setting('business_name', 'Laundry Desa') }}</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,500,600,700,800&display=swap" rel="stylesheet" />
     <style>[x-cloak] { display: none !important; }</style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-sans antialiased bg-gray-50">
-<div class="min-h-screen max-w-2xl mx-auto pb-24">
+<body class="font-sans antialiased bg-page text-gray-900">
+@php
+    $portalNav = [
+        ['portal.home', 'layout-grid', 'Beranda', ['portal.home']],
+        ['portal.transactions', 'file-text', 'Riwayat', ['portal.transactions', 'portal.transactions.show']],
+    ];
 
-    <header class="bg-white border-b px-4 h-14 flex items-center gap-3 sticky top-0 z-30">
-        @if($logoUrl = business_logo_url())
-            <img src="{{ $logoUrl }}" alt="Logo" class="h-8 w-auto object-contain">
-        @endif
-        <span class="font-bold text-brand-600 truncate">{{ setting('business_name', 'Laundry Desa') }}</span>
+    // Menu Jemput hanya muncul kalau layanan jemput menyala di Pengaturan
+    if (setting('pickup_enabled')) {
+        $portalNav[] = ['portal.pickup', 'truck', 'Jemput', ['portal.pickup', 'portal.pickup.*']];
+    }
+
+    $portalNav[] = ['portal.account', 'user', 'Profil', ['portal.account']];
+@endphp
+
+<div class="min-h-screen pb-24 md:pb-10">
+
+    <header class="bg-white border-b sticky top-0 z-30">
+        <div class="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
+            @if($logoUrl = business_logo_url())
+                <img src="{{ $logoUrl }}" alt="Logo" class="h-8 w-auto object-contain">
+            @endif
+            <span class="font-bold text-brand-700 truncate">{{ setting('business_name', 'Laundry Desa') }}</span>
+
+            @auth('customer')
+                {{-- Menu atas khusus layar lebar --}}
+                <nav class="hidden md:flex items-center gap-1 ml-auto">
+                    @foreach($portalNav as [$route, $icon, $label, $active])
+                        <a href="{{ route($route) }}"
+                           class="px-3.5 py-2 rounded-lg text-sm font-medium {{ request()->routeIs(...$active) ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-50' }}">{{ $label }}</a>
+                    @endforeach
+                </nav>
+            @endauth
+        </div>
     </header>
 
-    <main class="p-4 space-y-4">
+    <main class="mx-auto px-4 py-4 space-y-4 {{ $wide ? 'max-w-5xl' : 'max-w-2xl' }}">
         @if (session('success'))
             <div class="bg-success-50 text-success-600 px-4 py-3 rounded-xl text-sm">{{ session('success') }}</div>
         @endif
@@ -33,23 +60,10 @@
     </main>
 </div>
 
+{{-- Menu bawah khusus HP --}}
 @auth('customer')
-    @php
-        $portalNav = [
-            ['portal.home', 'layout-grid', 'Beranda', ['portal.home']],
-            ['portal.transactions', 'file-text', 'Riwayat', ['portal.transactions', 'portal.transactions.show']],
-        ];
-
-        // Menu Jemput hanya muncul kalau layanan jemput menyala di Pengaturan
-        if (setting('pickup_enabled')) {
-            $portalNav[] = ['portal.pickup', 'truck', 'Jemput', ['portal.pickup', 'portal.pickup.*']];
-        }
-
-        $portalNav[] = ['portal.account', 'user', 'Akun', ['portal.account']];
-    @endphp
-
-    <nav class="fixed inset-x-0 bottom-0 z-40 bg-white border-t">
-        <div class="max-w-2xl mx-auto h-16 flex">
+    <nav class="md:hidden fixed inset-x-0 bottom-0 z-40 bg-white border-t">
+        <div class="h-16 flex">
             @foreach($portalNav as [$route, $icon, $label, $active])
                 <a href="{{ route($route) }}"
                    class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[11px]

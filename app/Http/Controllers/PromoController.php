@@ -2,31 +2,43 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Promo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PromoController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $promos = Promo::latest()->paginate(15);
-        return view('promos.index', compact('promos'));
+        $status = in_array($request->get('status'), Promo::STATUSES, true) ? $request->get('status') : 'semua';
+
+        $counts = ['semua' => Promo::count()];
+        foreach (Promo::STATUSES as $s) {
+            $counts[$s] = Promo::withStatus($s)->count();
+        }
+
+        $promos = Promo::query()
+            ->when($status !== 'semua', fn ($q) => $q->withStatus($status))
+            ->orderByStatus()
+            ->orderBy('end_date')
+            ->orderByDesc('id')
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('promos.index', compact('promos', 'status', 'counts'));
     }
 
+    // Alamat lama tetap berfungsi dan diarahkan ke tab yang sesuai
     public function active()
     {
-        $promos = Promo::where('is_active', true)
-            ->whereDate('start_date', '<=', today())
-            ->whereDate('end_date', '>=', today())
-            ->paginate(15);
-        return view('promos.index', compact('promos'));
+        return redirect()->route('promos.index', ['status' => 'aktif']);
     }
 
     public function history()
     {
-        $promos = Promo::whereDate('end_date', '<', today())->latest()->paginate(15);
-        return view('promos.index', compact('promos'));
+        return redirect()->route('promos.index', ['status' => 'kadaluarsa']);
     }
 
     public function create()
@@ -96,6 +108,49 @@ class PromoController extends Controller
         $promo->update(['is_active' => ! $promo->is_active]);
 
         return back()->with('success', 'Status promo diperbarui.');
+    }
+
+    // Menambah kuota promo yang habis. Atomik, jadi aman kalau dua orang menekan bersamaan
+    public function addQuota(Request $request, Promo $promo)
+    {
+        $data = $request->validate(['add' => 'required|integer|min:1|max:100000']);
+
+        $changed = Promo::whereKey($promo->id)->whereNotNull('quota')->increment('quota', $data['add']);
+
+        if ($changed === 0) {
+            return back()->with('error', 'Promo ini tanpa batas kuota, tidak perlu ditambah.');
+        }
+
+        ActivityLog::record('promo_changed', 'menambah kuota promo ' . $promo->name . ' sebanyak ' . $data['add']);
+
+        return back()->with('success', 'Kuota ditambah ' . $data['add'] . '.');
+    }
+
+    // Salinan dibuat nonaktif dengan tanggal baru, lalu dibuka di halaman edit
+    public function duplicate(Promo $promo)
+    {
+        $copy = Promo::create([
+            'name' => Str::limit($promo->name, 235, '') . ' (salinan)',
+            'description' => $promo->description,
+            'type' => $promo->type,
+            'value' => $promo->value,
+            'value_type' => $promo->value_type,
+            'min_transaction' => $promo->min_transaction,
+            'min_weight' => $promo->min_weight,
+            'start_date' => today(),
+            'end_date' => today()->addDays(29),
+            'start_time' => $promo->start_time,
+            'end_time' => $promo->end_time,
+            'quota' => $promo->quota,
+            'used_count' => 0,
+            'is_active' => false,
+            'stackable' => $promo->stackable,
+        ]);
+
+        ActivityLog::record('promo_changed', 'menduplikasi promo ' . $promo->name);
+
+        return redirect()->route('promos.edit', $copy)
+            ->with('success', 'Salinan dibuat dalam keadaan nonaktif. Atur nilai dan tanggalnya, lalu aktifkan dari daftar promo.');
     }
 
     public function destroy(Promo $promo)

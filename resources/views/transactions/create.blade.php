@@ -389,27 +389,39 @@
             </div>
         </div>
 
-        {{-- Jarak di HP supaya bilah di bawah tidak menutupi isi halaman --}}
-        <div class="lg:hidden h-44"></div>
+         {{-- Jarak di HP supaya bilah di bawah tidak menutupi isi halaman --}}
+        <div class="lg:hidden h-72"></div>
 
-        {{-- Bilah HP: berat, total, dan tombol simpan selalu terlihat --}}
-        <div class="lg:hidden fixed inset-x-0 bottom-16 z-30 bg-white border-t px-4 py-3 space-y-2">
+        {{-- Bilah HP: berat, metode bayar, total, dan tombol simpan selalu terlihat --}}
+        <div class="lg:hidden fixed inset-x-0 bottom-16 z-30 bg-white border-t px-4 py-3 space-y-2.5">
             <template x-if="activeItem">
                 <div class="flex items-center gap-2">
                     <p class="flex-1 text-sm font-medium text-gray-800 truncate" x-text="activeItem.name"></p>
-                    <button type="button" @click="bump(-step)" class="w-9 h-9 rounded-lg border text-lg">&minus;</button>
+                    <button type="button" @click="bump(-step)" class="w-10 h-10 rounded-lg border text-lg">&minus;</button>
                     <span class="w-14 text-center font-mono font-bold" x-text="fmt(activeItem.qty || 0)"></span>
-                    <button type="button" @click="bump(step)" class="w-9 h-9 rounded-lg border text-lg">+</button>
+                    <button type="button" @click="bump(step)" class="w-10 h-10 rounded-lg border text-lg">+</button>
                 </div>
             </template>
+
+            <div class="flex gap-2 overflow-x-auto">
+                @foreach(payment_methods() as $key => $label)
+                    <button type="button" @click="paymentMethod = '{{ $key }}'"
+                            :class="paymentMethod === '{{ $key }}' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700'"
+                            class="border rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap">{{ $label }}</button>
+                @endforeach
+                <button type="button" @click="submit(true)" :disabled="submitting || cart.length === 0"
+                        class="border rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap text-gray-700 disabled:opacity-40">Nanti (Ambil)</button>
+            </div>
+
             <div class="flex items-center gap-3">
-                <button type="button" @click="$refs.summary.scrollIntoView({ behavior: 'smooth' })" class="flex-1 text-left">
-                    <p class="text-xs text-gray-500"><span x-text="cart.length"></span> item · ketuk untuk rincian</p>
+                <button type="button" @click="$refs.summary.scrollIntoView({ behavior: 'smooth' })" class="text-left">
+                    <p class="text-xs text-gray-500"><span x-text="cart.length"></span> item · rincian</p>
                     <p class="text-lg font-bold font-mono text-brand-700" x-text="'Rp ' + total.toLocaleString('id-ID')"></p>
                 </button>
                 <button type="button" @click="submit(false)" :disabled="submitting || cart.length === 0"
-                        class="bg-brand-700 text-white rounded-xl px-5 py-3 text-sm font-semibold disabled:opacity-50">
-                    Simpan &amp; Bayar
+                        class="flex-1 bg-brand-700 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
+                    <span x-show="!submitting">Simpan &amp; Bayar</span>
+                    <span x-show="submitting" x-cloak>Menyimpan...</span>
                 </button>
             </div>
         </div>

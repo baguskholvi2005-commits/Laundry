@@ -9,6 +9,8 @@ class Promo extends Model
 {
     use HasFactory;
 
+    public const STATUSES = ['aktif', 'habis_kuota', 'belum_dimulai', 'kadaluarsa', 'nonaktif'];
+
     protected $fillable = [
         'name', 'description', 'type', 'value', 'value_type', 'min_transaction',
         'min_weight', 'start_date', 'end_date', 'start_time', 'end_time',
@@ -27,6 +29,47 @@ class Promo extends Model
         return $this->hasMany(PromoUsage::class);
     }
 
+    /**
+     * Penyaring status di database, aturannya sama persis dengan accessor status_label di bawah.
+     */
+    public function scopeWithStatus($query, string $status)
+    {
+        $today = today()->toDateString();
+
+        return match ($status) {
+            'nonaktif' => $query->where('is_active', false),
+            'belum_dimulai' => $query->where('is_active', true)->whereDate('start_date', '>', $today),
+            'kadaluarsa' => $query->where('is_active', true)
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '<', $today),
+            'habis_kuota' => $query->where('is_active', true)
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+                ->whereNotNull('quota')
+                ->whereColumn('used_count', '>=', 'quota'),
+            'aktif' => $query->where('is_active', true)
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+                ->where(fn ($q) => $q->whereNull('quota')->orWhereColumn('used_count', '<', 'quota')),
+            default => $query,
+        };
+    }
+
+    // Urutan tampil: aktif dulu, lalu habis kuota, belum dimulai, kadaluarsa, nonaktif
+    public function scopeOrderByStatus($query)
+    {
+        $today = today()->toDateString();
+
+        return $query->orderByRaw(
+            'CASE WHEN is_active = 0 THEN 4
+                  WHEN start_date > ? THEN 2
+                  WHEN end_date < ? THEN 3
+                  WHEN quota IS NOT NULL AND used_count >= quota THEN 1
+                  ELSE 0 END',
+            [$today, $today]
+        );
+    }
+
     public function getStatusLabelAttribute(): string
     {
         if (! $this->is_active) return 'nonaktif';
@@ -37,6 +80,32 @@ class Promo extends Model
         if ($this->quota !== null && $this->used_count >= $this->quota) return 'habis_kuota';
 
         return 'aktif';
+    }
+
+    public function getTypeLabelAttribute(): string
+    {
+        return match ($this->type) {
+            'gratis_ongkir' => 'Gratis Ongkir',
+            'diskon_persen' => 'Diskon Persen',
+            'diskon_nominal' => 'Potongan Harga',
+            'berdasarkan_berat' => 'Promo Berat',
+            'minimal_transaksi' => 'Min. Belanja',
+            'member' => 'Khusus Member',
+            default => (string) $this->type,
+        };
+    }
+
+    public function getValueTextAttribute(): string
+    {
+        if ($this->type === 'gratis_ongkir') {
+            return 'Gratis Ongkir';
+        }
+
+        $value = (float) $this->value;
+
+        return $this->value_type === 'persen'
+            ? rtrim(rtrim(number_format($value, 2, ',', '.'), '0'), ',') . '%'
+            : 'Rp ' . number_format($value, 0, ',', '.');
     }
 
     /**

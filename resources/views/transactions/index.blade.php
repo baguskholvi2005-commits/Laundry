@@ -24,26 +24,90 @@
            class="px-4 py-1.5 rounded-lg {{ request()->routeIs('transactions.history') ? 'bg-brand-600 text-white' : '' }}">Riwayat</a>
     </div>
 
-    {{-- Pencarian dan filter --}}
-    @php $hasFilter = request()->filled('q') || request()->filled('date_from') || request()->filled('date_to') || request()->filled('payment'); @endphp
-    <form method="GET" action="{{ url()->current() }}" class="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <input type="text" name="q" value="{{ request('q') }}" placeholder="Kode, nama, atau No. HP..."
-                   class="md:col-span-2 border-gray-200 rounded-xl text-sm">
-            <input type="date" name="date_from" value="{{ request('date_from') }}" title="Dari tanggal" class="border-gray-200 rounded-xl text-sm">
-            <input type="date" name="date_to" value="{{ request('date_to') }}" title="Sampai tanggal" class="border-gray-200 rounded-xl text-sm">
-            <select name="payment" class="border-gray-200 rounded-xl text-sm">
-                <option value="">Semua metode bayar</option>
-                @foreach(payment_method_labels() as $key => $label)
-                    <option value="{{ $key }}" {{ request('payment') === $key ? 'selected' : '' }}>{{ $label }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div class="flex items-center gap-3 mt-3">
-            <button class="bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-medium">Cari</button>
-            @if($hasFilter)
-                <a href="{{ url()->current() }}" class="text-sm text-gray-500">Hapus filter</a>
-            @endif
+{{-- Pencarian dan filter --}}
+    @php
+        $hasFilter = request()->filled('q')
+            || request()->filled('date_from')
+            || request()->filled('date_to')
+            || request()->filled('payment');
+    @endphp
+
+    <form method="GET" action="{{ url()->current() }}"
+        class="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+
+            {{-- Pencarian --}}
+            <div class="md:col-span-4">
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ request('q') }}"
+                    placeholder="Kode, nama, atau No. HP..."
+                    class="w-full border border-gray-200 rounded-xl text-sm"
+                >
+            </div>
+
+            {{-- Tanggal awal --}}
+            <div class="md:col-span-2">
+                <input
+                    type="date"
+                    name="date_from"
+                    value="{{ request('date_from') }}"
+                    title="Dari tanggal"
+                    class="w-full border border-gray-200 rounded-xl text-sm"
+                >
+            </div>
+
+            {{-- Tanggal akhir --}}
+            <div class="md:col-span-2">
+                <input
+                    type="date"
+                    name="date_to"
+                    value="{{ request('date_to') }}"
+                    title="Sampai tanggal"
+                    class="w-full border border-gray-200 rounded-xl text-sm"
+                >
+            </div>
+
+            {{-- Metode pembayaran --}}
+            <div class="md:col-span-2">
+                <select
+                    name="payment"
+                    class="w-full border border-gray-200 rounded-xl text-sm"
+                >
+                    <option value="">Semua metode bayar</option>
+
+                    @foreach(payment_method_labels() as $key => $label)
+                        <option
+                            value="{{ $key }}"
+                            {{ request('payment') === $key ? 'selected' : '' }}
+                        >
+                            {{ $label }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            {{-- Tombol cari --}}
+            <div class="md:col-span-2 flex items-center gap-2">
+                <button
+                    type="submit"
+                    class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition whitespace-nowrap"
+                >
+                    Cari
+                </button>
+
+                @if($hasFilter)
+                    <a
+                        href="{{ url()->current() }}"
+                        class="text-sm text-gray-500 hover:text-gray-700 whitespace-nowrap"
+                    >
+                       <button type="button" class="px-3 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition">Reset</button>
+                    </a>
+                @endif
+            </div>
+
         </div>
     </form>
 

@@ -1,130 +1,187 @@
-<x-layouts.portal-layout title="Beranda">
+<x-layouts.portal-layout title="Beranda" :wide="true">
+    @php
+
+        $rp = fn ($n) => 'Rp ' . number_format($n, 0, ',', '.');
+        $discount = rtrim(rtrim(number_format((float) setting('member_discount_percent', 0), 1, ',', '.'), '0'), ',');
+        $pickupActive = setting('pickup_enabled') ? $customer->pickupRequests()->active()->latest()->first() : null;
+        $steps = ['menunggu', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'siap_diambil', 'selesai'];
+    @endphp
+
     <div>
         <p class="text-sm text-gray-500">Halo,</p>
-        <h1 class="text-2xl font-bold text-gray-900">{{ \Illuminate\Support\Str::before($customer->name, ' ') }}</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ Str::before($customer->name, ' ') }}</h1>
     </div>
 
-    {{-- Kartu keanggotaan --}}
-    @if($customer->is_member)
-        <div class="rounded-2xl bg-amber-50 border border-amber-200 p-5">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold tracking-wider text-amber-700">MEMBER</p>
-                <span class="text-amber-600">⭐</span>
-            </div>
-            <p class="text-lg font-bold text-gray-900 mt-2">{{ $customer->name }}</p>
-            <p class="text-sm text-amber-800 mt-1">
-                Diskon otomatis {{ rtrim(rtrim(number_format((float) setting('member_discount_percent', 0), 2, '.', ''), '0'), '.') }}% di setiap transaksi
-                <span class="text-xs">(tidak berlaku bersama promo lain)</span>
-            </p>
-            <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-amber-200">
-                <div>
-                    <p class="text-xs text-amber-700">Total hemat dari diskon</p>
-                    <p class="font-bold text-gray-900">Rp {{ number_format($totalSaved, 0, ',', '.') }}</p>
-                </div>
-                <div>
-                    <p class="text-xs text-amber-700">Total transaksi</p>
-                    <p class="font-bold text-gray-900">{{ $totalTransactions }}</p>
-                </div>
-            </div>
-        </div>
-    @else
-        <div class="rounded-2xl bg-white border border-gray-100 p-5">
-            <p class="text-xs font-semibold tracking-wider text-gray-400">MENUJU MEMBER</p>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
 
-            @if($eligible)
-                <p class="font-semibold text-gray-900 mt-2">Kamu sudah memenuhi syarat member 🎉</p>
-                <p class="text-sm text-gray-500 mt-1">Tanyakan ke kasir untuk dijadikan member dan dapatkan diskon otomatis di setiap transaksi.</p>
-            @else
-                <p class="font-semibold text-gray-900 mt-2">
-                    {{ $remainingTrx }} transaksi lagi
-                    <span class="font-normal text-gray-500">atau belanja Rp {{ number_format($remainingSpent, 0, ',', '.') }} lagi</span>
-                </p>
-                <div class="h-2 bg-gray-100 rounded-full mt-3">
-                    <div class="h-2 bg-brand-600 rounded-full" style="width: {{ $progress }}%"></div>
+        {{-- ============ KIRI ============ --}}
+        <div class="lg:col-span-2 space-y-4">
+
+            {{-- Kartu keanggotaan --}}
+            @if($customer->is_member)
+                <div class="rounded-2xl bg-gold-100 border border-gold-300 p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-semibold tracking-widest text-warning-700">MEMBER</p>
+                            <p class="text-xl font-bold text-gray-900 mt-1">{{ $customer->name }}</p>
+                            <p class="text-xs text-gray-600">Pelanggan sejak {{ $customer->created_at->translatedFormat('M Y') }}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-warning-700">Hemat bulan ini</p>
+                            <p class="text-2xl font-bold text-gray-900 tabular-nums">{{ $rp($monthSaved) }}</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <div class="rounded-xl bg-white/70 px-3 py-2 text-sm text-gray-800">
+                            <span class="font-semibold">Diskon {{ $discount }}%</span> otomatis di tiap transaksi
+                            <span class="block text-xs text-gray-500">tidak berlaku bersama promo</span>
+                        </div>
+                        <div class="rounded-xl bg-white/70 px-3 py-2 text-sm text-gray-800">
+                            <span class="font-semibold">{{ $totalTransactions }} transaksi</span>
+                            <span class="block text-xs text-gray-500">total hemat {{ $rp($totalSaved) }}</span>
+                        </div>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-400 mt-2">
-                    Syarat: {{ $minTrx }} kali transaksi atau total belanja Rp {{ number_format($minSpent, 0, ',', '.') }}.
-                    Setelah terpenuhi, pemilik toko yang menjadikan kamu member.
-                </p>
+            @else
+                <div class="rounded-2xl bg-white border border-gray-100 p-5">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-xs font-semibold tracking-widest text-gray-400">MENUJU MEMBER</p>
+                        <span class="text-xs bg-gray-100 text-gray-600 rounded-md px-2 py-1">Pelanggan reguler</span>
+                    </div>
+
+                    @if($eligible)
+                        <p class="font-semibold text-gray-900 mt-2">Kamu sudah memenuhi syarat member</p>
+                        <p class="text-sm text-gray-500 mt-1">Tanyakan ke kasir untuk dijadikan member dan dapatkan diskon {{ $discount }}% otomatis di setiap transaksi.</p>
+                    @else
+                        <p class="font-semibold text-gray-900 mt-2">
+                            {{ $remainingTrx }} transaksi lagi
+                            <span class="font-normal text-gray-500">atau belanja {{ $rp($remainingSpent) }} lagi</span>
+                        </p>
+                        <div class="h-2 bg-gray-100 rounded-full mt-3"><div class="h-2 bg-gold-500 rounded-full" style="width: {{ $progress }}%"></div></div>
+                        <div class="flex justify-between text-xs text-gray-500 mt-2">
+                            <span>{{ $totalTransactions }} / {{ $minTrx }} transaksi</span>
+                            <span>{{ $progress }}%</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Setelah syarat terpenuhi, pemilik toko yang menjadikan kamu member dengan diskon {{ $discount }}%.</p>
+                    @endif
+                </div>
+            @endif
+
+            {{-- Minta jemput --}}
+            @if(setting('pickup_enabled'))
+                <a href="{{ route('portal.pickup') }}" class="block rounded-2xl bg-brand-700 text-white p-4 hover:bg-brand-800 transition">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="font-semibold">{{ $pickupActive ? 'Permintaan jemput aktif' : 'Minta jemput cucian ke rumah' }}</p>
+                            <p class="text-sm text-white/75 mt-0.5">
+                                @if($pickupActive)
+                                    {{ $pickupActive->preferred_date->translatedFormat('l, d M') }} · {{ $pickupActive->slot_label }} · {{ ucfirst($pickupActive->status) }}
+                                @else
+                                    Pilih layanan dan jadwal, kasir akan mengonfirmasi.
+                                @endif
+                            </p>
+                        </div>
+                        <span class="text-sm font-semibold whitespace-nowrap">{{ $pickupActive ? 'Lihat' : 'Buat' }} →</span>
+                    </div>
+                </a>
+            @endif
+
+            {{-- Cucian berjalan --}}
+            <div>
+                <h2 class="font-semibold text-gray-900 mb-2">Cucian sedang berjalan</h2>
+
+                @forelse($active as $t)
+                    @php
+                        $idx = max(0, (int) array_search($t->status, $steps, true));
+                        $pct = (int) round((($idx + 1) / count($steps)) * 100);
+                    @endphp
+                    <a href="{{ route('portal.transactions.show', $t->tracking_token) }}"
+                       class="block bg-white rounded-2xl border border-gray-100 p-4 mb-3 hover:shadow-sm transition">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <p class="font-semibold text-gray-900">{{ $t->code }}</p>
+                                <p class="text-sm text-gray-500">{{ $t->items->pluck('service_name')->join(', ') }}</p>
+                            </div>
+                            <x-badge :status="$t->status" />
+                        </div>
+
+                        <div class="h-1.5 bg-gray-100 rounded-full mt-3"><div class="h-1.5 bg-brand-600 rounded-full" style="width: {{ $pct }}%"></div></div>
+                        <div class="flex justify-between text-[11px] text-gray-400 mt-1.5">
+                            <span>Diterima</span><span>Proses</span><span>Siap diambil</span><span>Selesai</span>
+                        </div>
+
+                        <div class="flex items-center justify-between mt-3 text-sm">
+                            <span class="text-gray-400">
+                                @if($t->estimated_done_at) Estimasi {{ $t->estimated_done_at->translatedFormat('d M Y') }} @endif
+                            </span>
+                            @if($t->remaining > 0)
+                                <span class="text-warning-700 font-medium">Sisa {{ $rp($t->remaining) }}</span>
+                            @endif
+                        </div>
+                        <p class="text-center text-sm font-medium text-brand-700 bg-brand-50 rounded-xl py-2.5 mt-3">Lacak dan periksa rincian</p>
+                    </a>
+                @empty
+                    <div class="bg-white rounded-2xl border border-gray-100 p-5 text-sm text-gray-400">Tidak ada cucian yang sedang berjalan.</div>
+                @endforelse
+            </div>
+
+            {{-- Riwayat terakhir --}}
+            @if($recent->isNotEmpty())
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="font-semibold text-gray-900">Riwayat cucian terakhir</h2>
+                        <a href="{{ route('portal.transactions') }}" class="text-sm text-brand-600">Lihat semua</a>
+                    </div>
+                    @foreach($recent as $t)
+                        <a href="{{ route('portal.transactions.show', $t->tracking_token) }}"
+                           class="flex items-center justify-between gap-3 bg-white rounded-2xl border border-gray-100 p-4 mb-3 hover:shadow-sm transition">
+                            <div class="min-w-0">
+                                <p class="font-medium text-gray-900 truncate">{{ $t->items->pluck('service_name')->join(', ') }}</p>
+                                <p class="text-xs text-gray-400">{{ $t->created_at->translatedFormat('d M Y') }} · {{ $t->code }}</p>
+                            </div>
+                            <div class="text-right flex-shrink-0">
+                                <p class="font-semibold tabular-nums">{{ $rp($t->total) }}</p>
+                                <x-badge :status="$t->payment_status" />
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
             @endif
         </div>
-    @endif
 
-        {{-- Minta jemput --}}
-    @if(setting('pickup_enabled'))
-        @php $pickupActive = $customer->pickupRequests()->active()->latest()->first(); @endphp
-        <a href="{{ route('portal.pickup') }}" class="block bg-white rounded-2xl border border-gray-100 p-4 hover:shadow-sm transition">
-            <div class="flex items-center justify-between gap-3">
+        {{-- ============ KANAN ============ --}}
+        <div class="space-y-4">
+
+            @if($promos->isNotEmpty())
                 <div>
-                    <p class="font-semibold text-gray-900">Minta Jemput Laundry</p>
-                    @if($pickupActive)
-                        <p class="text-xs text-gray-500 mt-0.5">{{ $pickupActive->preferred_date->translatedFormat('l, d M') }} · {{ $pickupActive->slot_label }}</p>
-                    @else
-                        <p class="text-xs text-gray-500 mt-0.5">Laundry dijemput ke alamatmu.</p>
-                    @endif
+                    <h2 class="font-semibold text-gray-900 mb-2">Promo untuk kamu</h2>
+                    @foreach($promos as $promo)
+                        <div class="bg-white rounded-2xl border border-gray-100 p-4 mb-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="font-semibold text-gray-900">{{ $promo['name'] }}</p>
+                                @if($promo['member_only'])
+                                    <span class="text-xs bg-gold-100 text-warning-700 px-2 py-0.5 rounded-md whitespace-nowrap">Khusus member</span>
+                                @endif
+                            </div>
+                            <p class="text-lg font-bold text-brand-700 mt-1">{{ $promo['value'] }}</p>
+                            @if($promo['description'])<p class="text-sm text-gray-500">{{ $promo['description'] }}</p>@endif
+                            @if($promo['syarat'])<p class="text-xs text-gray-400 mt-1">{{ $promo['syarat'] }}</p>@endif
+                            <p class="text-xs text-gray-400 mt-1">Sampai {{ $promo['until'] }}. Sebutkan ke kasir saat transaksi.</p>
+                        </div>
+                    @endforeach
                 </div>
-                @if($pickupActive)
-                    <x-badge :status="$pickupActive->status" />
-                @else
-                    <span class="text-brand-600 text-sm font-medium">Buat →</span>
+            @endif
+
+            {{-- Info toko --}}
+            <div class="bg-white rounded-2xl border border-gray-100 p-4 text-sm">
+                <p class="font-semibold text-gray-900">{{ setting('business_name', 'Laundry Desa') }}</p>
+                @if(setting('business_address'))<p class="text-gray-500 mt-1">{{ setting('business_address') }}</p>@endif
+                @if($hours = operating_hours_text())<p class="text-gray-500 mt-1">Buka: {{ $hours }}</p>@endif
+                @if(setting('business_whatsapp'))
+                    <a href="https://wa.me/{{ setting('business_whatsapp') }}" target="_blank"
+                       class="block text-center border border-success-200 text-success-600 rounded-xl py-2.5 mt-3 font-medium">Hubungi lewat WhatsApp</a>
                 @endif
             </div>
-        </a>
-    @endif
-
-    
-    {{-- Cucian berjalan --}}
-    <div>
-        <h2 class="font-semibold text-gray-900 mb-2">Cucian Berjalan</h2>
-
-        @forelse($active as $t)
-            <a href="{{ route('portal.transactions.show', $t->tracking_token) }}"
-               class="block bg-white rounded-2xl border border-gray-100 p-4 mb-3 hover:shadow-sm transition">
-                <div class="flex items-start justify-between gap-2">
-                    <span class="font-semibold text-gray-900">{{ $t->code }}</span>
-                    <x-badge :status="$t->status" />
-                </div>
-                <p class="text-sm text-gray-500 mt-1">{{ $t->items->pluck('service_name')->join(', ') }}</p>
-                <div class="flex items-center justify-between mt-3 text-sm">
-                    <span class="text-gray-400">
-                        @if($t->estimated_done_at) Estimasi selesai {{ $t->estimated_done_at->translatedFormat('d M Y') }} @endif
-                    </span>
-                    @if($t->status !== 'dibatalkan' && $t->remaining > 0)
-                        <span class="text-warning-600 font-medium">Sisa Rp {{ number_format($t->remaining, 0, ',', '.') }}</span>
-                    @endif
-                </div>
-            </a>
-        @empty
-            <div class="bg-white rounded-2xl border border-gray-100 p-5 text-sm text-gray-400">Tidak ada cucian yang sedang berjalan.</div>
-        @endforelse
+        </div>
     </div>
-
-    {{-- Promo --}}
-    @if($promos->isNotEmpty())
-    <div>
-        <h2 class="font-semibold text-gray-900 mb-2">Promo untuk Kamu</h2>
-        @foreach($promos as $promo)
-            <div class="bg-white rounded-2xl border border-gray-100 p-4 mb-3">
-                <div class="flex items-start justify-between gap-2">
-                    <p class="font-semibold text-gray-900">{{ $promo['name'] }}</p>
-                    @if($promo['member_only'])
-                        <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full whitespace-nowrap">Khusus member</span>
-                    @endif
-                </div>
-                <p class="text-lg font-bold text-brand-600 mt-1">{{ $promo['value'] }}</p>
-                @if($promo['description'])<p class="text-sm text-gray-500">{{ $promo['description'] }}</p>@endif
-                @if($promo['syarat'])<p class="text-xs text-gray-400 mt-1">{{ $promo['syarat'] }}</p>@endif
-                <p class="text-xs text-gray-400 mt-1">Sampai {{ $promo['until'] }}. Sebutkan ke kasir saat transaksi.</p>
-            </div>
-        @endforeach
-    </div>
-    @endif
-
-    {{-- Hubungi toko --}}
-    @if(setting('business_whatsapp'))
-        <a href="https://wa.me/{{ setting('business_whatsapp') }}" target="_blank"
-           class="block text-center border border-success-200 text-success-600 bg-white rounded-xl py-3 text-sm font-medium">
-            Hubungi {{ setting('business_name', 'Laundry Desa') }} lewat WhatsApp
-        </a>
-    @endif
 </x-layouts.portal-layout>

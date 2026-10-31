@@ -39,7 +39,7 @@
             </div>
 
             <div class="py-12">
-                <h2 class="text-4xl font-bold leading-tight">Catat cucian, hitung harga, pantau status.</h2>
+                <h2 class="text-4xl font-bold leading-tight">{{ setting('business_tagline') ?: 'Catat cucian, hitung harga, pantau status.' }}</h2>
                 <p class="mt-4 text-white/70 max-w-md">Berat, harga, nota, pembayaran, dan antar-jemput dalam satu layar.</p>
 
                 <div class="grid grid-cols-2 gap-3 mt-8 max-w-md">

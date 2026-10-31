@@ -453,6 +453,16 @@ export default function transactionForm(config) {
                 !confirm('Transaksi ini tidak punya pelanggan terdaftar, jadi tagihannya sulit ditagih. Tetap simpan sebagai tagihan?')) {
                 return;
             }
+                        // Uang diterima kosong: minta konfirmasi supaya pembayaran tidak tercatat atau terlewat tanpa disadari
+            if (!asDebt && !(Number(this.paidAmount) > 0) && this.total > 0) {
+                const full = Math.ceil(this.total);
+
+                if (!confirm('Uang diterima masih kosong.\n\nCatat pembayaran lunas Rp ' + full.toLocaleString('id-ID') + '?\n\nPilih Batal kalau uang belum diterima, lalu pakai "Simpan sebagai Tagihan" atau "Nanti (Ambil)".')) {
+                    return;
+                }
+
+                this.paidAmount = full;
+            }
 
             this.submitting = true;
 

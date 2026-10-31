@@ -123,6 +123,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/permintaan-jemput', [PickupRequestController::class, 'index'])->name('pickup-requests.index');
         Route::patch('/permintaan-jemput/{pickupRequest}/konfirmasi', [PickupRequestController::class, 'confirm'])->name('pickup-requests.confirm');
         Route::patch('/permintaan-jemput/{pickupRequest}/tolak', [PickupRequestController::class, 'reject'])->name('pickup-requests.reject');
+
+        // Tarif layanan yang bisa dicetak dan ditempel di toko
+        Route::get('/services/tariff', [ServiceController::class, 'tariff'])->name('services.tariff');
     });
 
     /*
@@ -158,6 +161,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/promos/{promo}/edit', [PromoController::class, 'edit'])->name('promos.edit');
         Route::put('/promos/{promo}', [PromoController::class, 'update'])->name('promos.update');
         Route::patch('/promos/{promo}/toggle', [PromoController::class, 'toggleActive'])->name('promos.toggle');
+        Route::patch('/promos/{promo}/quota', [PromoController::class, 'addQuota'])->name('promos.quota');
+        Route::post('/promos/{promo}/duplicate', [PromoController::class, 'duplicate'])->name('promos.duplicate');
         Route::delete('/promos/{promo}', [PromoController::class, 'destroy'])->name('promos.destroy');
 
         // Paket Laundry
@@ -174,8 +179,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
         Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::get('/expenses/{expense}/edit', [ExpenseController::class, 'edit'])->name('expenses.edit');
+        Route::get('/expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
+        Route::patch('/expenses/budget', [ExpenseController::class, 'budget'])->name('expenses.budget');
         Route::put('/expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
         Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+
 
         // Inventori
         Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
@@ -187,12 +195,15 @@ Route::middleware('auth')->group(function () {
         Route::post('/inventory/{item}/stock-in', [InventoryController::class, 'stockIn'])->name('inventory.stockIn');
         Route::post('/inventory/{item}/stock-out', [InventoryController::class, 'stockOut'])->name('inventory.stockOut');
         Route::delete('/inventory/{item}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
+        Route::post('/inventory/move', [InventoryController::class, 'move'])->name('inventory.move');
 
         // Laporan
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/receivables', [ReportController::class, 'receivables'])->name('reports.receivables');
+        Route::get('/reports/ledger', [ReportController::class, 'ledger'])->name('reports.ledger');
+        Route::get('/reports/pdf', [ReportController::class, 'pdf'])->name('reports.pdf');
 
         // Log aktivitas dan cadangan
         Route::get('/log-aktivitas', [ActivityLogController::class, 'index'])->name('activity-logs.index');
@@ -209,6 +220,7 @@ Route::middleware('auth')->group(function () {
         // Pengaturan
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::get('/settings/sample-nota', [SettingController::class, 'sampleNota'])->name('settings.sampleNota');
     });
 });
 

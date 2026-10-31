@@ -4,14 +4,9 @@
     <meta charset="utf-8">
     <title>Nota {{ $transaction->code }}</title>
     <style>
-        @page {
-            margin: 0;
-        }
+        @page { margin: 0; }
         * { box-sizing: border-box; }
-        html, body {
-            margin: 0;
-            padding: 0;
-        }
+        html, body { margin: 0; padding: 0; }
         body {
             font-family: 'DejaVu Sans', sans-serif;
             font-size: 12px;
@@ -24,17 +19,10 @@
         .right { text-align: right; }
         .bold { font-weight: bold; }
         .muted { color: #6b7280; font-size: 10px; }
-        hr {
-            border: none;
-            border-top: 1px dashed #9ca3af;
-            margin: 8px 0;
-        }
+        hr { border: none; border-top: 1px dashed #9ca3af; margin: 8px 0; }
         table { width: 100%; border-collapse: collapse; }
         td { padding: 2px 0; vertical-align: top; }
-        .item-name { width: 60%; }
-        .item-qty { width: 15%; text-align: center; }
-        .item-price { width: 25%; text-align: right; }
-        .total-row td { padding-top: 4px; }
+        .item-price { width: 30%; text-align: right; }
         .grand-total {
             font-size: 14px;
             font-weight: bold;
@@ -47,19 +35,34 @@
             padding: 2px 8px;
             border-radius: 10px;
             font-size: 10px;
-            background: #dbeafe;
-            color: #1d4ed8;
+            background: #CFEDE7;
+            color: #0C5F59;
         }
     </style>
 </head>
 <body>
+    @php
+        $wa = preg_replace('/\D/', '', (string) setting('business_whatsapp', ''));
+        $waShow = $wa !== '' ? (str_starts_with($wa, '62') ? '0' . substr($wa, 2) : $wa) : '';
+        $unitLabels = ['kg' => 'kg', 'pcs' => 'pcs', 'paket' => 'paket'];
+    @endphp
+
+    @if(! empty($sample))
+        <div class="center bold" style="border: 1px dashed #9ca3af; padding: 3px; margin-bottom: 6px; font-size: 9px;">
+            *** CONTOH CETAK, BUKAN TRANSAKSI SUNGGUHAN ***
+        </div>
+    @endif
+
     <div class="center">
-        @if($logoData = business_logo_data_uri())  
+        @if($logoData = business_logo_data_uri())
             <img src="{{ $logoData }}" style="height: 36px; margin-bottom: 4px;"><br>
         @endif
         <div class="bold" style="font-size: 15px;">{{ setting('business_name', 'Laundry Desa') }}</div>
+        @if(setting('business_tagline'))
+            <div class="muted" style="font-style: italic;">{{ setting('business_tagline') }}</div>
+        @endif
         <div class="muted">{{ setting('business_address', '') }}</div>
-        <div class="muted">{{ setting('business_whatsapp', '') }}</div>
+        @if($waShow !== '')<div class="muted">WA {{ $waShow }}</div>@endif
     </div>
 
     <hr>
@@ -75,7 +78,7 @@
         </tr>
         <tr>
             <td>Kasir</td>
-            <td class="right">{{ $transaction->cashier->name }}</td>
+            <td class="right">{{ $transaction->cashier->name ?? '-' }}</td>
         </tr>
         <tr>
             <td>Pelanggan</td>
@@ -94,9 +97,9 @@
     <table>
         @foreach($transaction->items as $item)
         <tr>
-            <td class="item-name">
+            <td style="width: 70%;">
                 {{ $item->service_name }}<br>
-                <span class="muted">{{ $item->qty }} {{ $item->unit_type }} x Rp {{ number_format($item->price_per_unit, 0, ',', '.') }}</span>
+                <span class="muted">{{ (float) $item->qty }} {{ $unitLabels[$item->unit_type] ?? $item->unit_type }} x Rp {{ number_format($item->price_per_unit, 0, ',', '.') }}</span>
             </td>
             <td class="item-price">Rp {{ number_format($item->subtotal, 0, ',', '.') }}</td>
         </tr>
@@ -122,7 +125,7 @@
             <td class="right">Rp {{ number_format($transaction->delivery_fee, 0, ',', '.') }}</td>
         </tr>
         @endif
-        <tr class="total-row">
+        <tr>
             <td class="grand-total">TOTAL</td>
             <td class="right grand-total">Rp {{ number_format($transaction->total, 0, ',', '.') }}</td>
         </tr>
@@ -148,15 +151,11 @@
     <table>
         <tr>
             <td>Status Pembayaran</td>
-            <td class="right">
-                <span class="badge">{{ ucwords(str_replace('_', ' ', $transaction->payment_status)) }}</span>
-            </td>
+            <td class="right"><span class="badge">{{ ucwords(str_replace('_', ' ', $transaction->payment_status)) }}</span></td>
         </tr>
         <tr>
             <td>Status Laundry</td>
-            <td class="right">
-                <span class="badge">{{ ucwords(str_replace('_', ' ', $transaction->status)) }}</span>
-            </td>
+            <td class="right"><span class="badge">{{ ucwords(str_replace('_', ' ', $transaction->status)) }}</span></td>
         </tr>
         @if($transaction->estimated_done_at)
         <tr>
@@ -169,22 +168,27 @@
     <hr>
 
     <div class="center muted">
-        Terima kasih telah menggunakan jasa kami.<br>
-        Simpan nota ini sebagai bukti transaksi.
+        @if(setting('nota_footer'))
+            {!! nl2br(e(setting('nota_footer'))) !!}
+        @else
+            Terima kasih telah menggunakan jasa kami.<br>
+            Simpan nota ini sebagai bukti transaksi.
+        @endif
     </div>
-    
+
     @if(setting('payment_info'))
-        <div class="muted" style="margin-top: 6px;">{!! nl2br(e(setting('payment_info'))) !!}</div>
-    @endif
-    @if($hours = operating_hours_text())
-        <div class="muted" style="margin-top: 4px;">Jam buka: {{ $hours }}</div>
+        <div class="center muted" style="margin-top: 6px;">{!! nl2br(e(setting('payment_info'))) !!}</div>
     @endif
 
-    @if(isset($qrCodeSvg))
-    <div class="center" style="margin-top: 10px;">
-        {!! $qrCodeSvg !!}
-        <div class="muted">Scan untuk cek status laundry</div>
-    </div>
+    @if($hours = operating_hours_text())
+        <div class="center muted" style="margin-top: 4px;">Jam buka: {{ $hours }}</div>
+    @endif
+
+    @if(isset($qrCodeSvg) && (string) setting('nota_show_qr', '1') === '1')
+        <div class="center" style="margin-top: 10px;">
+            {!! $qrCodeSvg !!}
+            <div class="muted">Scan untuk cek status laundry</div>
+        </div>
     @endif
 </body>
 </html>
