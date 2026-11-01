@@ -93,6 +93,9 @@
                         @endforelse
                     </div>
 
+                    <p class="text-sm"><span class="text-gray-400">Bayar:</span> <span class="font-semibold text-gray-800">{{ $r->payment_label }}</span>
+                        <span class="text-xs text-gray-500">· {{ $r->payment_hint }}</span></p>
+
                     <p class="text-gray-600 whitespace-pre-line">{{ $r->address }}</p>
                     @if($r->notes)
                         <p class="text-xs text-gray-400">Catatan pelanggan: {{ $r->notes }}</p>

@@ -102,7 +102,8 @@
                             <span class="text-xs px-2.5 py-1 rounded-full whitespace-nowrap {{ $r->wants_delivery ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-600' }}">{{ $r->mode_label }}</span>
                         </div>
 
-                        <p class="text-sm text-gray-700 mt-3 whitespace-pre-line">{{ $r->address }}</p>
+                        <p class="text-sm mt-3"><span class="text-gray-400">Bayar:</span> <span class="font-semibold text-gray-800">{{ $r->payment_label }}</span>
+                            <span class="text-xs text-gray-500">· {{ $r->payment_hint }}</span></p>
                         <p class="text-sm text-gray-500 mt-1">
                             No. WhatsApp: {{ $r->customer->phone }}
                             @if($wa)<a href="https://wa.me/{{ $wa }}" target="_blank" class="ml-2 text-xs bg-brand-50 text-brand-700 rounded-md px-2 py-0.5 font-medium">Chat WA</a>@endif

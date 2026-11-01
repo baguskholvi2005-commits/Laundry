@@ -29,6 +29,10 @@
             </div>
 
             @if($active->items->isNotEmpty())
+                <p class="text-sm text-gray-700 mt-3">
+                    <span class="text-gray-400">Pembayaran:</span> <span class="font-semibold">{{ $active->payment_label }}</span>
+                    <span class="block text-xs text-gray-500">{{ $active->payment_hint }}</span>
+                </p>
                 <div class="mt-3 rounded-xl bg-gray-50 p-3 text-sm">
                     <p class="text-xs text-gray-400 mb-1">Layanan yang kamu minta</p>
                     @foreach($active->items as $item)
@@ -144,6 +148,25 @@
                         </div>
                     @endif
                 @endforeach
+            </div>
+
+            {{-- Cara pembayaran --}}
+            <div>
+                <p class="text-sm font-medium text-gray-700">Mau bayar pakai apa?</p>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    @foreach($paymentMethods as $key => $label)
+                        <label class="cursor-pointer">
+                            <input type="radio" name="payment_method" value="{{ $key }}" class="sr-only peer"
+                                   {{ old('payment_method', array_key_first($paymentMethods)) === $key ? 'checked' : '' }}>
+                            <span class="block text-center rounded-xl border px-3 py-3 text-sm text-gray-600 peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 peer-checked:font-semibold">{{ $label }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                <p class="text-xs text-gray-400 mt-2">
+                    Tunai: dibayar saat cucian diantar kembali atau saat kamu mengambilnya di toko.
+                    Pilihan lain: kasir mengirim nota lewat WhatsApp setelah cucian ditimbang, lalu kamu membayar sesuai nominal di nota.
+                </p>
+                @error('payment_method') <p class="text-xs text-danger-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
             {{-- 3. Alamat dan jadwal --}}

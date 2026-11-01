@@ -189,7 +189,8 @@ class TransactionController extends Controller
                 : ($selected
                     ? 'Transaksi baru untuk ' . $selected->name . '.'
                     : 'Pelanggan tidak ditemukan, cari lagi di kolom pelanggan.');
-        } elseif ($request->filled('pickup_request')) {
+        } 
+        elseif ($request->filled('pickup_request')) {
             // Dari permintaan jemput pelanggan: pelanggan, layanan, Jemput, dan Antar sudah terisi
             $pr = PickupRequest::with(['customer', 'items'])->find($request->get('pickup_request'));
 
@@ -221,6 +222,7 @@ class TransactionController extends Controller
                 'items' => $cartItems,
                 'use_pickup' => true,
                 'use_delivery' => $pr->wants_delivery,
+                'payment_method' => $pr->payment_method,
             ];
             $prefillSkipped = count($pr->items) - count($cartItems);
             $pickupRequestId = $pr->id;
@@ -230,6 +232,7 @@ class TransactionController extends Controller
                 . (count($pr->items) > 0
                     ? 'Layanan dan berat di keranjang hanya perkiraan pelanggan: timbang dulu, lalu sesuaikan. Berat yang masih kosong wajib diisi sebelum menyimpan.'
                     : 'Pelanggan belum memilih layanan, pilih sesuai cucian yang dijemput.')
+                    . 'Pelanggan memilih bayar: ' . $pr->payment_label . ' (' . lcfirst($pr->payment_hint) . ')'
                 . ($pr->wants_delivery
                     ? ' Jemput dan Antar sudah tercentang otomatis.'
                     : ' Jemput sudah tercentang otomatis, cucian nanti diambil sendiri oleh pelanggan.');

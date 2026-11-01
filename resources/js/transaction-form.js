@@ -47,6 +47,9 @@ export default function transactionForm(config) {
                 if (config.prefill.use_delivery && this.deliveryEnabled) {
                     this.useDelivery = true;
                 }
+                if (config.prefill.payment_method) {
+                    this.paymentMethod = config.prefill.payment_method;
+                }
             }
 
             // Baris yang beratnya masih kosong langsung jadi baris aktif

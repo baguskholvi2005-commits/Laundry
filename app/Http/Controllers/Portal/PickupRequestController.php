@@ -33,6 +33,7 @@ class PickupRequestController extends Controller
             'customer' => $customer,
             'enabled' => (bool) setting('pickup_enabled'),
             'deliveryEnabled' => (bool) setting('delivery_enabled'),
+            'paymentMethods' => payment_methods(),
             'services' => $services,
             'active' => $customer->pickupRequests()->active()->with('items')->latest()->first(),
             'history' => $customer->pickupRequests()->latest()->take(8)->get(),
@@ -53,6 +54,7 @@ class PickupRequestController extends Controller
 
         $data = $request->validate([
             'service_mode' => ['required', Rule::in($modes)],
+            'payment_method' => ['required', Rule::in(array_keys(payment_methods()))],
             'service_ids' => 'required|array|min:1|max:30',
             'service_ids.*' => 'integer|distinct',
             'address' => 'required|string|min:8|max:255',
@@ -62,6 +64,8 @@ class PickupRequestController extends Controller
         ], [
             'service_mode.required' => 'Pilih jenis layanan: jemput saja atau jemput + antar.',
             'service_mode.in' => 'Jenis layanan yang dipilih tidak tersedia.',
+            'payment_method.required' => 'Pilih cara pembayaran.',
+            'payment_method.in' => 'Cara pembayaran yang dipilih tidak tersedia.',
             'service_ids.required' => 'Pilih minimal satu layanan.',
             'service_ids.min' => 'Pilih minimal satu layanan.',
             'address.required' => 'Alamat jemput wajib diisi.',
@@ -132,6 +136,7 @@ class PickupRequestController extends Controller
             $pickupRequest = PickupRequest::create([
                 'customer_id' => $customer->id,
                 'service_mode' => $data['service_mode'],
+                'payment_method' => $data['payment_method'],
                 'address' => $data['address'],
                 'preferred_date' => $data['preferred_date'],
                 'time_slot' => $data['time_slot'],

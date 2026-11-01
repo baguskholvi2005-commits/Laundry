@@ -248,6 +248,10 @@
                             ? "Halo {$name}, laundry dengan nomor transaksi {$transaction->code} sudah selesai dan dapat diambil. Total Rp " . number_format($transaction->total, 0, ',', '.') . "."
                             : "Halo {$name}, transaksi {$transaction->code} sedang kami proses. Total Rp " . number_format($transaction->total, 0, ',', '.') . ", sisa pembayaran Rp " . number_format($transaction->remaining, 0, ',', '.') . ".";
                         $message .= " Cek status laundry: {$trackUrl}";
+
+                                                if ($transaction->remaining > 0 && setting('payment_info')) {
+                        $message .= "\n\nCara pembayaran:\n" . setting('payment_info');
+                        }
                     @endphp
                     <a href="https://wa.me/{{ $phone }}?text={{ urlencode($message) }}" target="_blank"
                        class="mt-3 w-full border border-success-200 text-success-600 rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2">

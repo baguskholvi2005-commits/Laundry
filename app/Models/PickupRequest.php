@@ -21,7 +21,7 @@ class PickupRequest extends Model
     ];
 
     // Kolom status dan penanganan sengaja tidak masuk $fillable, hanya diubah lewat forceFill di kode yang berwenang
-    protected $fillable = ['customer_id', 'service_mode', 'address', 'preferred_date', 'time_slot', 'notes'];
+    protected $fillable = ['customer_id', 'service_mode','payment_method', 'address', 'preferred_date', 'time_slot', 'notes'];
 
     protected $casts = [
         'preferred_date' => 'date',
@@ -68,6 +68,19 @@ class PickupRequest extends Model
         return $this->service_mode === 'jemput_antar';
     }
 
+        public function getPaymentLabelAttribute(): string
+    {
+        return payment_method_labels()[$this->payment_method] ?? ucfirst((string) $this->payment_method);
+    }
+
+    // Tunai dibayar saat cucian diantar atau diambil. Selain itu dibayar setelah nota dikirim lewat WhatsApp
+    public function getPaymentHintAttribute(): string
+    {
+        return $this->payment_method === 'cash'
+            ? 'Dibayar tunai saat cucian ' . ($this->wants_delivery ? 'diantar kembali' : 'diambil di toko') . '.'
+            : 'Dibayar setelah nota dikirim lewat WhatsApp.';
+    }
+
     // Toko buka pada hari ini? Kalau hari buka belum diatur, dianggap buka setiap hari
     public static function isOpenOn(Carbon $date): bool
     {
@@ -88,7 +101,7 @@ class PickupRequest extends Model
 
         return collect(range(0, 6))
             ->map(fn ($i) => today()->addDays($i))
-            ->filter(fn ($d) => static::isOpenOn($d) && ! ($d->isToday() && $closedToday))
+            ->filter(fn ($d) => static::isOpenOn($d))
             ->values();
     }
 }

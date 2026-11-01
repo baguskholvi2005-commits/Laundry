@@ -37,7 +37,7 @@
     <div class="bg-white rounded-2xl border border-gray-100 p-5">
         <h2 class="font-semibold text-sm mb-3">Pembayaran</h2>
         <div class="space-y-1.5 text-sm">
-            <div class="flex justify-between"><span class="text-gray-500">Subtotal</span><span>Rp {{ number_format($transaction->subtotal, 0, ',', '.') }}</span></div>
+            <div class="flesisx justify-between"><span class="text-gray-500">Subtotal</span><span>Rp {{ number_format($transaction->subtotal, 0, ',', '.') }}</span></div>
             @if($transaction->discount > 0)
                 <div class="flex justify-between text-danger-600">
                     <span>Diskon
@@ -58,7 +58,8 @@
 
         @if($transaction->status !== 'dibatalkan' && $transaction->remaining > 0)
             <p class="text-sm text-warning-600 bg-warning-50 rounded-xl px-3 py-2 mt-3">
-                Sisa tagihan <span class="font-bold">Rp {{ number_format($transaction->remaining, 0, ',', '.') }}</span>. Pembayaran dilakukan di toko.
+                Sisa tagihan <span class="font-bold">Rp {{ number_format($transaction->remaining, 0, ',', '.') }}</span>. Pembayaran tunai saat cucian diantar atau diambil.
+                @if(setting('payment_info')) <span class="block mt-1 whitespace-pre-line">{{ setting('payment_info') }}</span> @endif
             </p>
         @endif
     </div>
