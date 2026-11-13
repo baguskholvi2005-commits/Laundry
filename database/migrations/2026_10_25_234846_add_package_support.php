@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -9,35 +10,65 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasColumn('service_packages', 'service_id')) {
+        if (!Schema::hasColumn('service_packages', 'service_id')) {
             Schema::table('service_packages', function (Blueprint $table) {
-                $table->foreignId('service_id')->nullable()->after('name')
-                    ->constrained('services')->nullOnDelete();
+                $table->foreignId('service_id')
+                    ->nullable()
+                    ->constrained('services')
+                    ->nullOnDelete();
             });
         }
 
-        if (! Schema::hasColumn('transaction_items', 'package_id')) {
+        if (!Schema::hasColumn('transaction_items', 'package_id')) {
             Schema::table('transaction_items', function (Blueprint $table) {
-                $table->foreignId('package_id')->nullable()->after('service_id')
-                    ->constrained('service_packages')->nullOnDelete();
+                $table->foreignId('package_id')
+                    ->nullable()
+                    ->constrained('service_packages')
+                    ->nullOnDelete();
             });
         }
 
-        // Baris paket di transaksi memakai satuan "paket"
-        DB::statement("ALTER TABLE transaction_items MODIFY unit_type ENUM('kg', 'pcs', 'paket') NOT NULL");
+        // Penyesuaian ENUM hanya diperlukan untuk MySQL.
+        // SQLite tidak memerlukan perubahan karena ENUM
+        // tidak didukung secara native oleh SQLite.
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("
+                ALTER TABLE transaction_items
+                MODIFY unit_type ENUM('kg', 'pcs', 'paket') NOT NULL
+            ");
+        }
     }
 
     public function down(): void
     {
-        DB::statement("UPDATE transaction_items SET unit_type = 'pcs' WHERE unit_type = 'paket'");
-        DB::statement("ALTER TABLE transaction_items MODIFY unit_type ENUM('kg', 'pcs') NOT NULL");
+        // Kembalikan satuan paket sebelum menghapus dukungan paket.
+        if (Schema::hasColumn('transaction_items', 'unit_type')) {
+            DB::table('transaction_items')
+                ->where('unit_type', 'paket')
+                ->update(['unit_type' => 'pcs']);
+        }
 
-        Schema::table('transaction_items', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('package_id');
-        });
+        // Penyesuaian ENUM hanya untuk MySQL.
+        if (
+            DB::getDriverName() === 'mysql' &&
+            Schema::hasColumn('transaction_items', 'unit_type')
+        ) {
+            DB::statement("
+                ALTER TABLE transaction_items
+                MODIFY unit_type ENUM('kg', 'pcs') NOT NULL
+            ");
+        }
 
-        Schema::table('service_packages', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('service_id');
-        });
+        if (Schema::hasColumn('transaction_items', 'package_id')) {
+            Schema::table('transaction_items', function (Blueprint $table) {
+                $table->dropConstrainedForeignId('package_id');
+            });
+        }
+
+        if (Schema::hasColumn('service_packages', 'service_id')) {
+            Schema::table('service_packages', function (Blueprint $table) {
+                $table->dropConstrainedForeignId('service_id');
+            });
+        }
     }
 };
