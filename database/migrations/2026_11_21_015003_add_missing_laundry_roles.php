@@ -9,15 +9,17 @@ return new class extends Migration
     public function up(): void
     {
         foreach (['pemilik', 'kasir', 'pegawai'] as $role) {
-            DB::table('roles')->firstOrCreate([
+            DB::table('roles')->insertOrIgnore([
                 'name' => $role,
                 'guard_name' => 'web',
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
     }
 
     public function down(): void
     {
-        // Tidak menghapus role agar data pengguna tetap aman.
+        // Tidak menghapus role yang sudah ada.
     }
 };
